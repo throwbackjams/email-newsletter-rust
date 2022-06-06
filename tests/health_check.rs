@@ -1,4 +1,4 @@
-use zero2prod::run;
+use zero2prod::startup::run;
 use std::net::TcpListener;
 
 #[tokio::test]
@@ -75,7 +75,7 @@ async fn subscribe_returns_a_400_when_request_is_missing() {
 fn spawn_app() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind address");
     let port = listener.local_addr().unwrap().port();
-    let server = zero2prod::run(listener).expect("Failed to run server");
+    let server = run(listener).expect("Failed to run server");
 
     let _ = tokio::spawn(server);
 
