@@ -55,7 +55,7 @@ async fn subscribe_returns_a_400_when_request_is_missing() {
         let response = client
             .post(&format!("{}/subscribe", &address))
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(invalid_response) //Q: Shouldn't invalid_reponse and error_message be switched here?
+            .body(invalid_response)
             .send()
             .await
             .expect("Failed to execute subscribe request");
