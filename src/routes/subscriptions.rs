@@ -1,6 +1,6 @@
-use actix_web::{ web, HttpResponse };
-use sqlx::PgPool;
+use actix_web::{web, HttpResponse};
 use chrono::Utc;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
@@ -13,7 +13,6 @@ pub async fn subscribe(
     form: web::Form<FormData>,
     connection_pool: web::Data<PgPool>,
 ) -> HttpResponse {
-    
     match sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at)
@@ -29,9 +28,11 @@ pub async fn subscribe(
     {
         Ok(_) => HttpResponse::Ok().finish(),
         Err(err) => {
-            println!("Failed to execute query within subscribe handler. Error: {}", err);
+            println!(
+                "Failed to execute query within subscribe handler. Error: {}",
+                err
+            );
             HttpResponse::InternalServerError().finish()
         }
     }
 }
-

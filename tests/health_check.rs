@@ -1,8 +1,8 @@
-use zero2prod::{startup::run, configuration::DatabaseSettings};
+use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
-use sqlx::{PgConnection, Connection, PgPool, Executor};
-use zero2prod::configuration::get_configuration;
 use uuid::Uuid;
+use zero2prod::configuration::get_configuration;
+use zero2prod::{configuration::DatabaseSettings, startup::run};
 
 #[tokio::test]
 async fn health_check_works() {
@@ -43,14 +43,14 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .send()
         .await
         .expect("Failed to execute subscribe reqeust");
-    
+
     assert_eq!(200, response.status().as_u16());
 
     let saved = sqlx::query!("SELECT email, name FROM subscriptions",)
         .fetch_one(&test_app.db_pool)
         .await
         .expect("Failed to fectch subscriptions");
-    
+
     assert_eq!(saved.email, "ursula_le_guin@gmail.com");
     assert_eq!(saved.name, "le guin");
 }
@@ -63,13 +63,12 @@ async fn subscribe_returns_a_400_when_request_is_missing() {
     let test_cases = vec![
         ("name=le%20guin", "missing the email"),
         ("email=ursula_le_guin%40gmail.com", "missing the name"),
-        ("", "missing both name and email")
-        ];
+        ("", "missing both name and email"),
+    ];
 
     let client = reqwest::Client::new();
 
     for (invalid_response, error_message) in test_cases {
-
         let response = client
             .post(endpoint.clone())
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -84,10 +83,7 @@ async fn subscribe_returns_a_400_when_request_is_missing() {
             "The API did not fail with 400 bad request when the payload was {}",
             error_message
         );
-
     }
-
-
 }
 
 pub struct TestApp {
@@ -99,21 +95,23 @@ async fn spawn_app() -> TestApp {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind address");
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
-        
-    let mut configuration = get_configuration().expect("Failed to read configuration within spwan_app");
+
+    let mut configuration =
+        get_configuration().expect("Failed to read configuration within spwan_app");
     configuration.database.database_name = Uuid::new_v4().to_string();
 
     let connection_pool = configure_database(&configuration.database).await;
 
     let server = run(listener, connection_pool.clone()).expect("Failed to run server");
     let _ = tokio::spawn(server);
-    
-    TestApp { address , db_pool: connection_pool }
 
+    TestApp {
+        address,
+        db_pool: connection_pool,
+    }
 }
 
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
-    
     let mut connection = PgConnection::connect(&config.connection_string_without_db())
         .await
         .expect("Failed to connect to Postgres in configure_database");
