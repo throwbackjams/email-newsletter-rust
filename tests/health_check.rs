@@ -5,6 +5,7 @@ use uuid::Uuid;
 use zero2prod::configuration::get_configuration;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use zero2prod::{configuration::DatabaseSettings, startup::run};
+use secrecy::ExposeSecret;
 
 //Ensurce that tracing stack is only initialized once
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -131,7 +132,7 @@ async fn spawn_app() -> TestApp {
 }
 
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
-    let mut connection = PgConnection::connect(&config.connection_string_without_db())
+    let mut connection = PgConnection::connect(&config.connection_string_without_db().expose_secret())
         .await
         .expect("Failed to connect to Postgres in configure_database");
     connection
@@ -139,7 +140,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .await
         .expect("Failed to create database in configure_database");
 
-    let connection_pool = PgPool::connect(&config.connection_string())
+    let connection_pool = PgPool::connect(&config.connection_string().expose_secret())
         .await
         .expect("Failed to connect to Postgres in configure_database");
     sqlx::migrate!("./migrations")
