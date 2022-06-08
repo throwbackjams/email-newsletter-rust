@@ -1,8 +1,24 @@
+use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::get_configuration;
+use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use zero2prod::{configuration::DatabaseSettings, startup::run};
+
+//Ensurce that tracing stack is only initialized once
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "debug".to_string();
+    let subscriber_name = "test".to_string();
+
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber("test".into(), "debug".into(), std::io::stout);
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber("test".into(), "debug".into(), std::io::sink);
+        init_subscriber(subscriber);
+    };
+});
 
 #[tokio::test]
 async fn health_check_works() {
@@ -92,6 +108,9 @@ pub struct TestApp {
 }
 
 async fn spawn_app() -> TestApp {
+    //TRACING only executed once
+    Lazy::force(&TRACING);
+
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind address");
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
