@@ -29,6 +29,7 @@ unicode-segmentation = "1"
 
 [dev-dependencies]
 once_cell = "1"
+claim = "0.5" #claim provides more informative error messages
 
 [dependencies.sqlx]
 version = "0.5.7"
