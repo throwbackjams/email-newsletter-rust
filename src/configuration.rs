@@ -1,6 +1,9 @@
 use secrecy::{ExposeSecret, Secret};
 use serde_aux::field_attributes::deserialize_number_from_string;
-use sqlx::{postgres::{PgConnectOptions, PgSslMode}, ConnectOptions};
+use sqlx::{
+    postgres::{PgConnectOptions, PgSslMode},
+    ConnectOptions,
+};
 
 #[derive(serde::Deserialize)]
 pub struct Settings {
@@ -47,9 +50,7 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
 
     // Add in environment settings with the prefix APP and `__` as a separator
     // Example: `APP_APPLICATION_PORT=5001` would set `Settings.application.port`
-    settings.merge(
-        config::Environment::with_prefix("app").separator("__")
-    )?;
+    settings.merge(config::Environment::with_prefix("app").separator("__"))?;
 
     settings.try_into()
 }
@@ -85,17 +86,16 @@ impl TryFrom<String> for Environment {
 
 impl DatabaseSettings {
     pub fn without_db(&self) -> PgConnectOptions {
-        
         let ssl_mode = if self.require_ssl {
             PgSslMode::Require
         } else {
             PgSslMode::Prefer
         };
-        
+
         PgConnectOptions::new()
             .host(&self.host)
             .username(&self.username)
-            .password(&self.password.expose_secret())
+            .password(self.password.expose_secret())
             .port(self.port)
             .ssl_mode(ssl_mode)
     }
@@ -105,5 +105,4 @@ impl DatabaseSettings {
         options.log_statements(tracing::log::LevelFilter::Trace);
         options
     }
-
 }

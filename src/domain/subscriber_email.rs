@@ -31,13 +31,13 @@ mod tests {
         let email = "".to_string();
         assert_err!(SubscriberEmail::parse(email));
     }
-    
+
     #[test]
     fn email_missing_at_symbol_is_rejected() {
         let email = "ursuladomain.com".to_string();
         assert_err!(SubscriberEmail::parse(email));
     }
-    
+
     #[test]
     fn email_missing_subject_is_rejected() {
         let email = "@domain.com".to_string();
@@ -55,7 +55,7 @@ mod tests {
             Self(email)
         }
     }
-    
+
     #[quickcheck_macros::quickcheck]
     fn valid_emails_are_parsed_successfully(valid_email: ValidEmailFixture) -> bool {
         dbg!(&valid_email.0);
