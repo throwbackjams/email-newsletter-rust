@@ -5,6 +5,7 @@ use uuid::Uuid;
 use zero2prod::configuration::get_configuration;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use zero2prod::{configuration::DatabaseSettings, startup::run};
+use zero2prod::email_client::EmailClient;
 
 //Ensurce that tracing stack is only initialized once
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -147,9 +148,13 @@ async fn spawn_app() -> TestApp {
         get_configuration().expect("Failed to read configuration within spwan_app");
     configuration.database.database_name = Uuid::new_v4().to_string();
 
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url.clone(), 
+        configuration.email_client.sender().expect("Failed to parse configuration email client"));
+
     let connection_pool = configure_database(&configuration.database).await;
 
-    let server = run(listener, connection_pool.clone()).expect("Failed to run server");
+    let server = run(listener, connection_pool.clone(), email_client).expect("Failed to run server");
     let _ = tokio::spawn(server);
 
     TestApp {
