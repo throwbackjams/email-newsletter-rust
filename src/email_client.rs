@@ -71,7 +71,7 @@ struct SendEmailRequest<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::domain::{SubscriberEmail, subscriber_email};
+    use crate::domain::SubscriberEmail;
     use crate::email_client::EmailClient;
     use fake::faker::internet::en::SafeEmail;
     use fake::faker::lorem::en::{Paragraph, Sentence};
@@ -195,6 +195,7 @@ mod tests {
         assert_err!(outcome);
     }
 
+    #[tokio::test]
     async fn send_email_times_out_if_the_server_takes_too_long() {
         let mock_server = MockServer::start().await;
         let email_client = email_client(mock_server.uri());

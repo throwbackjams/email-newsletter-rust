@@ -1,5 +1,5 @@
 use sqlx::postgres::PgPoolOptions;
-use zero2prod::email_client::{self, EmailClient};
+use zero2prod::email_client::EmailClient;
 use std::net::TcpListener;
 use zero2prod::configuration::get_configuration;
 use zero2prod::startup::run;
