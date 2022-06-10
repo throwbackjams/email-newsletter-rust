@@ -1,15 +1,9 @@
 use crate::helpers::spawn_app;
+
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     let test_app = spawn_app().await;
     let endpoint = format!("{}/subscribe", test_app.address);
-    // let configuration = get_configuration().expect("Failed to get configuration");
-
-    // let connection_string = configuration.database.connection_string();
-
-    // let mut connection = PgConnection::connect(&connection_string)
-    //     .await
-    //     .expect("Failed to connect to Postgres");
 
     let client = reqwest::Client::new();
 

@@ -80,7 +80,6 @@ mod tests {
     use wiremock::{Request, Mock, MockServer, ResponseTemplate};
     use secrecy::Secret;
     use claim::{assert_ok, assert_err};
-
     struct SendEmailBodyMatcher;
 
     //Implement Match trait to enable creation of custom matcher to check JSON body (chained together in and method)
