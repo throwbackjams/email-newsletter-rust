@@ -150,7 +150,9 @@ async fn spawn_app() -> TestApp {
 
     let email_client = EmailClient::new(
         configuration.email_client.base_url.clone(), 
-        configuration.email_client.sender().expect("Failed to parse configuration email client"));
+        configuration.email_client.sender().expect("Failed to parse configuration email client"),
+        configuration.email_client.authorization_token
+    );
 
     let connection_pool = configure_database(&configuration.database).await;
 
