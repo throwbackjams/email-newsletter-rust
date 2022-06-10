@@ -148,10 +148,13 @@ async fn spawn_app() -> TestApp {
         get_configuration().expect("Failed to read configuration within spwan_app");
     configuration.database.database_name = Uuid::new_v4().to_string();
 
+    let response_timeout = configuration.email_client.timeout();
+
     let email_client = EmailClient::new(
         configuration.email_client.base_url.clone(), 
         configuration.email_client.sender().expect("Failed to parse configuration email client"),
-        configuration.email_client.authorization_token
+        configuration.email_client.authorization_token,
+        response_timeout
     );
 
     let connection_pool = configure_database(&configuration.database).await;

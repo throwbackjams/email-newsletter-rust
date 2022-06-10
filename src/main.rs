@@ -16,10 +16,13 @@ async fn main() -> std::io::Result<()> {
         configuration.application.host, configuration.application.port
     );
 
+    let timeout = configuration.email_client.timeout();
+
     let email_client = EmailClient::new(
         configuration.email_client.base_url.clone(), 
         configuration.email_client.sender().expect("Failed to parse configuration email client"),
-        configuration.email_client.authorization_token
+        configuration.email_client.authorization_token,
+        timeout,
     );
 
     let connection_pool = PgPoolOptions::new()
