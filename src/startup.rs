@@ -1,9 +1,12 @@
-use crate::{routes::{health_check, subscribe}, email_client::EmailClient};
+use crate::configuration::{DatabaseSettings, Settings};
+use crate::{
+    email_client::EmailClient,
+    routes::{health_check, subscribe},
+};
 use actix_web::{dev::Server, web, App, HttpServer};
-use sqlx::{PgPool, postgres::PgPoolOptions};
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
-use crate::configuration::{Settings, DatabaseSettings};
 
 /// A new type to hold the server that is and its port
 pub struct Application {
@@ -14,30 +17,30 @@ pub struct Application {
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, std::io::Error> {
         let connection_pool = get_connection_pool(&configuration.database);
-    
+
         let sender_email = configuration
             .email_client
             .sender()
             .expect("Invalid sender email address in settings");
-    
+
         let response_timeout = configuration.email_client.timeout();
-        
+
         let email_client = EmailClient::new(
             configuration.clone().email_client.base_url,
             sender_email,
             configuration.clone().email_client.authorization_token,
             response_timeout,
         );
-    
+
         let address = format!(
             "{}:{}",
             configuration.application.host, configuration.application.port
         );
-    
+
         let listener = TcpListener::bind(address)?;
         let port = listener.local_addr().unwrap().port();
         let server = run(listener, connection_pool, email_client)?;
-        Ok(Self { port, server})
+        Ok(Self { port, server })
     }
 
     pub fn port(&self) -> u16 {
@@ -56,7 +59,7 @@ pub fn get_connection_pool(configuration: &DatabaseSettings) -> PgPool {
 }
 
 pub fn run(
-    listener: TcpListener, 
+    listener: TcpListener,
     connection_pool: PgPool,
     email_client: EmailClient,
 ) -> Result<Server, std::io::Error> {

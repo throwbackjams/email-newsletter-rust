@@ -1,12 +1,10 @@
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
-use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::get_configuration;
+use zero2prod::configuration::DatabaseSettings;
+use zero2prod::startup::{get_connection_pool, Application};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
-use zero2prod::{configuration::DatabaseSettings, startup::run};
-use zero2prod::email_client::EmailClient;
-use zero2prod::startup::{Application, get_connection_pool};
 
 //Ensurce that tracing stack is only initialized once
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -14,12 +12,10 @@ static TRACING: Lazy<()> = Lazy::new(|| {
     let subscriber_name = "test".to_string();
 
     if std::env::var("TEST_LOG").is_ok() {
-        let subscriber = get_subscriber(
-            subscriber_name, default_filter_level, std::io::stdout);
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::stdout);
         init_subscriber(subscriber);
     } else {
-        let subscriber = get_subscriber(
-            subscriber_name, default_filter_level, std::io::sink);
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::sink);
         init_subscriber(subscriber);
     };
 });
@@ -50,7 +46,7 @@ pub async fn spawn_app() -> TestApp {
         .await
         .expect("Failed to build application in tests");
     let address = format!("http://127.0.01:{}", application.port());
-    
+
     let _ = tokio::spawn(application.run_until_stopped());
 
     TestApp {
@@ -63,7 +59,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
     let mut connection = PgConnection::connect_with(&config.without_db())
         .await
         .expect("Failed to connect to Postgres in configure_database");
-    
+
     connection
         .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
         .await
@@ -72,8 +68,8 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
     let connection_pool = PgPool::connect_with(config.with_db())
         .await
         .expect("Failed to connect to Postgres in configure_database");
-    
-        sqlx::migrate!("./migrations")
+
+    sqlx::migrate!("./migrations")
         .run(&connection_pool)
         .await
         .expect("Failed to migrate database in configure_database");
