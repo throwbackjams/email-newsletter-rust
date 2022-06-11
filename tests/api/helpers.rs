@@ -25,6 +25,18 @@ pub struct TestApp {
     pub db_pool: PgPool,
 }
 
+impl TestApp {
+    pub async fn post_subscriptions(&self, body: String) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/subscribe", &self.address))
+            .header("Content-type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to execute post subscriptions.")
+    }
+}
+
 pub async fn spawn_app() -> TestApp {
     //TRACING only executed once
     Lazy::force(&TRACING);
