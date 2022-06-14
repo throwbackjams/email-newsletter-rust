@@ -74,7 +74,6 @@ impl TestApp {
             html,
             plain_text
         }
-    
     }
 }
 
