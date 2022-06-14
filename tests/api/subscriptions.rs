@@ -12,7 +12,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .respond_with(ResponseTemplate::new(200))
         .mount(&test_app.email_server)
         .await;
-    
+
     let response = test_app.post_subscriptions(body.into()).await;
 
     assert_eq!(200, response.status().as_u16());
@@ -94,9 +94,8 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
         .expect(1)
         .mount(&test_app.email_server)
         .await;
-    
-    test_app.post_subscriptions(body.into()).await;
 
+    test_app.post_subscriptions(body.into()).await;
 }
 
 #[tokio::test]
@@ -115,7 +114,7 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
     // Get the first intercepted request from mock server
     let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
     let confirmation_link = test_app.get_confirmation_links(email_request);
-    
+
     // The two links should be identical
     assert_eq!(confirmation_link.html, confirmation_link.plain_text);
 }

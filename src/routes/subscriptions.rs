@@ -1,12 +1,12 @@
+use crate::email_client::EmailClient;
 use actix_web::{web, HttpResponse};
 use chrono::Utc;
-use sqlx::{PgPool, Postgres, Transaction};
-use uuid::Uuid;
-use crate::email_client::{EmailClient, self};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
+use sqlx::{PgPool, Postgres, Transaction};
+use uuid::Uuid;
 
-use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName, new_subscriber};
+use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
 use crate::startup::ApplicationBaseUrl;
 
 #[derive(serde::Deserialize)]
@@ -37,9 +37,8 @@ pub async fn subscribe(
     form: web::Form<FormData>,
     connection_pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
-    base_url: web::Data<ApplicationBaseUrl>
+    base_url: web::Data<ApplicationBaseUrl>,
 ) -> HttpResponse {
-
     let new_subscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
         Err(_) => return HttpResponse::BadRequest().finish(),
@@ -72,7 +71,7 @@ pub async fn subscribe(
         &email_client,
         new_subscriber,
         &base_url.0,
-        &subscription_token
+        &subscription_token,
     )
     .await
     .is_err()
@@ -142,7 +141,6 @@ pub async fn store_token(
     })?;
 
     Ok(())
-
 }
 
 #[tracing::instrument(
@@ -153,12 +151,12 @@ pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
     base_url: &str,
-    subscription_token: &str
+    subscription_token: &str,
 ) -> Result<(), reqwest::Error> {
     let confirmation_link = format!(
         "{}/subscribe/confirm?subscription_token={}",
-        base_url,
-        subscription_token);
+        base_url, subscription_token
+    );
 
     let plain_body = format!(
         "Welcome to our newsletter!\nVisit {} to confirm your subscription.",
@@ -171,12 +169,7 @@ pub async fn send_confirmation_email(
     );
 
     email_client
-        .send_email(
-            new_subscriber.email,
-            "Welcome",
-            &html_body,
-            &plain_body,
-        )
+        .send_email(new_subscriber.email, "Welcome", &html_body, &plain_body)
         .await
 }
 

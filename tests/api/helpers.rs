@@ -2,11 +2,11 @@ use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::Mock;
+use wiremock::MockServer;
 use zero2prod::configuration::get_configuration;
 use zero2prod::configuration::DatabaseSettings;
 use zero2prod::startup::{get_connection_pool, Application};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
-use wiremock::MockServer;
 
 //Ensurce that tracing stack is only initialized once
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -46,10 +46,7 @@ impl TestApp {
             .expect("Failed to execute post subscriptions.")
     }
 
-    pub fn get_confirmation_links(
-        &self,
-        email_request: &wiremock::Request
-    ) -> ConfirmationLinks {
+    pub fn get_confirmation_links(&self, email_request: &wiremock::Request) -> ConfirmationLinks {
         let body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
 
         // Extract the link from the body
@@ -70,10 +67,7 @@ impl TestApp {
         let html = get_link(&body["HtmlBody"].as_str().unwrap());
         let plain_text = get_link(&body["TextBody"].as_str().unwrap());
 
-        ConfirmationLinks {
-            html,
-            plain_text
-        }
+        ConfirmationLinks { html, plain_text }
     }
 }
 
@@ -106,10 +100,8 @@ pub async fn spawn_app() -> TestApp {
 
     let _ = tokio::spawn(application.run_until_stopped());
 
-    
-
     TestApp {
-        address:format!("http://localhost:{}", application_port),
+        address: format!("http://localhost:{}", application_port),
         db_pool: get_connection_pool(&configuration.database),
         email_server,
         port: application_port,

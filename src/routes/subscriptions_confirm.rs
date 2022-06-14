@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
 pub struct Parameters {
-    subscription_token: String
+    subscription_token: String,
 }
 
 #[tracing::instrument(
@@ -15,7 +15,9 @@ pub async fn confirm(
     parameters: web::Query<Parameters>,
     connection_pool: web::Data<PgPool>,
 ) -> HttpResponse {
-    let id = match get_subscriber_id_from_token(&connection_pool, &parameters.subscription_token).await {
+    let id = match get_subscriber_id_from_token(&connection_pool, &parameters.subscription_token)
+        .await
+    {
         Ok(id) => id,
         Err(_) => return HttpResponse::InternalServerError().finish(),
     };
@@ -23,7 +25,10 @@ pub async fn confirm(
     match id {
         None => HttpResponse::Unauthorized().finish(),
         Some(subscriber_id) => {
-            if confirm_subscriber(&connection_pool, subscriber_id).await.is_err() {
+            if confirm_subscriber(&connection_pool, subscriber_id)
+                .await
+                .is_err()
+            {
                 return HttpResponse::InternalServerError().finish();
             }
             HttpResponse::Ok().finish()
@@ -46,7 +51,10 @@ pub async fn get_subscriber_id_from_token(
     .fetch_optional(connection_pool)
     .await
     .map_err(|e| {
-        tracing::error!("Failed to execute get subscriber id from token query: {:?}", e);
+        tracing::error!(
+            "Failed to execute get subscriber id from token query: {:?}",
+            e
+        );
         e
     })?;
 
@@ -70,7 +78,7 @@ pub async fn confirm_subscriber(
     .execute(connection_pool)
     .await
     .map_err(|e| {
-        tracing::error!("Failed to execute confirm subscriber query: {:?}",e);
+        tracing::error!("Failed to execute confirm subscriber query: {:?}", e);
         e
     })?;
     Ok(())

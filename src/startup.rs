@@ -1,7 +1,7 @@
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::{
     email_client::EmailClient,
-    routes::{health_check, subscribe, confirm},
+    routes::{confirm, health_check, subscribe},
 };
 use actix_web::{dev::Server, web, App, HttpServer};
 use sqlx::{postgres::PgPoolOptions, PgPool};
@@ -43,7 +43,8 @@ impl Application {
             listener,
             connection_pool,
             email_client,
-            configuration.application.base_url)?;
+            configuration.application.base_url,
+        )?;
         Ok(Self { port, server })
     }
 
