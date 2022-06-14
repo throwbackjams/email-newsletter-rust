@@ -1,7 +1,6 @@
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
-use wiremock::Mock;
 use wiremock::MockServer;
 use zero2prod::configuration::get_configuration;
 use zero2prod::configuration::DatabaseSettings;

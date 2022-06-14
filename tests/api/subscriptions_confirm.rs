@@ -1,5 +1,3 @@
-use actix_web::rt::spawn;
-use reqwest::Url;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
