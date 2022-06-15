@@ -1,2 +1,4 @@
 /target
-/scripts/pgadmin.sh
+/z2p-logs.txt
+/spec.yaml
+/scripts/postmark_test.sh

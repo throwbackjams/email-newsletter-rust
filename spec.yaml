@@ -36,8 +36,8 @@ services:
         scope: RUN_TIME
         value: ${APP_URL}
       - key: APP_EMAIL_CLIENT__AUTHORIZATION_TOKEN
-        scope: RUN_TIME
-        value: ${POSTMARK}
+        scope: RUN_AND_BUILD_TIME
+        value: 3856fc67-6ef8-4661-92bc-5fd8398cd912
 databases:
   - engine: PG
     name: newsletter
