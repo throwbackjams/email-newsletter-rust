@@ -39,10 +39,67 @@ pub async fn subscribe(
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> HttpResponse {
-    let new_subscriber = match form.0.try_into() {
+    let new_subscriber: NewSubscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
+
+    let check_existing = match sqlx::query!(
+            r#"
+            SELECT id, status
+            FROM subscriptions 
+            WHERE email = $1
+            "#,
+            new_subscriber.email.as_ref()
+        )
+        .fetch_optional(connection_pool.get_ref())
+        .await
+        {
+            Ok(option_record) => option_record,
+            Err(_) => return HttpResponse::InternalServerError().finish(),
+        };
+    
+    match check_existing {
+        None => (),
+        Some(record) => {
+
+            // If the existing subscriber already has a confirmed status, then exit with a success code
+            if record.status == "confirmed" {
+                return HttpResponse::Ok().finish();
+            }
+
+            let subscription_token = generate_subscription_token();
+
+            let mut transaction = match connection_pool.begin().await {
+                Ok(transaction) => transaction,
+                Err(_) => return HttpResponse::InternalServerError().finish(),
+            };
+
+            if store_token(&mut transaction, record.id, &subscription_token)
+            .await
+            .is_err()
+            {
+                return HttpResponse::InternalServerError().finish();
+            }
+
+            if transaction.commit().await.is_err() {
+                return HttpResponse::InternalServerError().finish();
+            }        
+
+            if send_confirmation_email(
+                &email_client,
+                new_subscriber,
+                &base_url.0,
+                &subscription_token,
+            )
+            .await
+            .is_err()
+            {
+                return HttpResponse::InternalServerError().finish();
+            }
+        return HttpResponse::Ok().finish()
+        }
+    }
 
     let mut transaction = match connection_pool.begin().await {
         Ok(transaction) => transaction,

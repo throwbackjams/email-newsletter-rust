@@ -1,4 +1,4 @@
-use crate::helpers::spawn_app;
+use crate::helpers::{spawn_app, ConfirmationLinks};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -117,4 +117,35 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
 
     // The two links should be identical
     assert_eq!(confirmation_link.html, confirmation_link.plain_text);
+}
+
+#[tokio::test]
+async fn subscribing_twice_results_in_a_second_confirmation_email_sent() {
+    let test_app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&test_app.email_server)
+        .await;
+    
+    // First time subscribing
+    test_app.post_subscriptions(body.into()).await;
+    // Second time subscribing
+    test_app.post_subscriptions(body.into()).await;
+
+    let email_requests = &test_app.email_server.received_requests().await.unwrap();
+
+    assert_eq!(email_requests.len(), 2);
+
+    let email_one = &email_requests[0];
+    let email_two = &email_requests[1];
+
+    let confirmation_links_one = test_app.get_confirmation_links(email_one);
+    let confirmation_links_two = test_app.get_confirmation_links(email_two);
+
+    assert_eq!(confirmation_links_one.html, confirmation_links_one.plain_text);
+    assert_eq!(confirmation_links_two.html, confirmation_links_two.plain_text);
+
 }
