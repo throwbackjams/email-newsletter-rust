@@ -32,6 +32,32 @@
     },
     "query": "\n        UPDATE subscriptions SET status = 'confirmed' WHERE id = $1\n        "
   },
+  "d50a408a9ce6d8011ae30cdfd146f444498eddb1cb99b4f7b61749931e06e2ff": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "status",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT id, status\n            FROM subscriptions \n            WHERE email = $1\n            "
+  },
   "e6822c9e162eabc20338cc27d51a8e80578803ec1589c234d93c3919d14a96a6": {
     "describe": {
       "columns": [],
