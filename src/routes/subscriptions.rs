@@ -5,6 +5,7 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
+use actix_web::ResponseError;
 
 use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
 use crate::startup::ApplicationBaseUrl;
@@ -38,10 +39,10 @@ pub async fn subscribe(
     connection_pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
-) -> HttpResponse {
+) -> Result<HttpResponse, actix_web::Error> {
     let new_subscriber: NewSubscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
-        Err(_) => return HttpResponse::BadRequest().finish(),
+        Err(_) => return Ok(HttpResponse::BadRequest().finish()),
     };
 
     let check_existing = match sqlx::query!(
@@ -56,7 +57,7 @@ pub async fn subscribe(
         .await
         {
             Ok(option_record) => option_record,
-            Err(_) => return HttpResponse::InternalServerError().finish(),
+            Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
         };
     
     match check_existing {
@@ -65,25 +66,20 @@ pub async fn subscribe(
 
             // If the existing subscriber already has a confirmed status, then exit with a success code
             if record.status == "confirmed" {
-                return HttpResponse::Ok().finish();
+                return Ok(HttpResponse::Ok().finish());
             }
 
             let subscription_token = generate_subscription_token();
 
             let mut transaction = match connection_pool.begin().await {
                 Ok(transaction) => transaction,
-                Err(_) => return HttpResponse::InternalServerError().finish(),
+                Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
             };
 
-            if store_token(&mut transaction, record.id, &subscription_token)
-            .await
-            .is_err()
-            {
-                return HttpResponse::InternalServerError().finish();
-            }
+            store_token(&mut transaction, record.id, &subscription_token).await?;
 
             if transaction.commit().await.is_err() {
-                return HttpResponse::InternalServerError().finish();
+                return Ok(HttpResponse::InternalServerError().finish());
             }        
 
             if send_confirmation_email(
@@ -95,33 +91,28 @@ pub async fn subscribe(
             .await
             .is_err()
             {
-                return HttpResponse::InternalServerError().finish();
+                return Ok(HttpResponse::InternalServerError().finish());
             }
-        return HttpResponse::Ok().finish()
+        return Ok(HttpResponse::Ok().finish())
         }
     }
 
     let mut transaction = match connection_pool.begin().await {
         Ok(transaction) => transaction,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
+        Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
     };
 
     let subscriber_id = match insert_subscriber(&mut transaction, &new_subscriber).await {
         Ok(id) => id,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
+        Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
     };
 
     let subscription_token = generate_subscription_token();
 
-    if store_token(&mut transaction, subscriber_id, &subscription_token)
-        .await
-        .is_err()
-    {
-        return HttpResponse::InternalServerError().finish();
-    }
+    store_token(&mut transaction, subscriber_id, &subscription_token).await?;
 
     if transaction.commit().await.is_err() {
-        return HttpResponse::InternalServerError().finish();
+        return Ok(HttpResponse::InternalServerError().finish());
     }
 
     if send_confirmation_email(
@@ -133,9 +124,9 @@ pub async fn subscribe(
     .await
     .is_err()
     {
-        return HttpResponse::InternalServerError().finish();
+        return Ok(HttpResponse::InternalServerError().finish());
     }
-    HttpResponse::Ok().finish()
+    Ok(HttpResponse::Ok().finish())
 }
 
 pub fn parse_subscriber(form: FormData) -> Result<NewSubscriber, String> {
@@ -181,7 +172,7 @@ pub async fn store_token(
     transaction: &mut Transaction<'_, Postgres>,
     subscriber_id: Uuid,
     subscription_token: &str,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), StoreTokenError> {
     sqlx::query!(
         r#"
         INSERT INTO subscription_tokens (subscription_token, subscriber_id)
@@ -193,10 +184,49 @@ pub async fn store_token(
     .execute(transaction)
     .await
     .map_err(|e| {
-        tracing::error!("Failed to execute store token query: {:?}", e);
-        e
+        StoreTokenError(e)
     })?;
 
+    Ok(())
+}
+
+pub struct StoreTokenError(sqlx::Error);
+
+impl ResponseError for StoreTokenError {}
+
+impl std::fmt::Debug for StoreTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
+impl std::fmt::Display for StoreTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "A database error was encountered while \
+            trying to store a subscription token."
+        )
+    }
+}
+
+impl std::error::Error for StoreTokenError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+// Goes through entire chain of errors and their sources, using the source method of the Error trait
+fn error_chain_fmt(
+    e: &impl std::error::Error,
+    f: &mut std::fmt::Formatter<'_>
+) -> std::fmt::Result {
+    writeln!(f, "{}\n", e)?;
+    let mut current = e.source();
+    while let Some(cause) = current {
+        writeln!(f, "Caused by:\n\t{}", cause)?;
+        current = cause.source();
+    }
     Ok(())
 }
 
