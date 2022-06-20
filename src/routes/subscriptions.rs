@@ -1,12 +1,12 @@
 use crate::email_client::EmailClient;
-use actix_web::{web, HttpResponse, http::StatusCode};
+use actix_web::ResponseError;
+use actix_web::{http::StatusCode, web, HttpResponse};
+use anyhow::Context;
 use chrono::Utc;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
-use actix_web::ResponseError;
-use anyhow::Context;
 
 use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
 use crate::startup::ApplicationBaseUrl;
@@ -41,24 +41,24 @@ pub async fn subscribe(
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, SubscribeError> {
-    let new_subscriber: NewSubscriber = form.0.try_into().map_err(SubscribeError::ValidationError)?;
+    let new_subscriber: NewSubscriber =
+        form.0.try_into().map_err(SubscribeError::ValidationError)?;
 
     let check_existing = sqlx::query!(
-            r#"
+        r#"
             SELECT id, status
             FROM subscriptions 
             WHERE email = $1
             "#,
-            new_subscriber.email.as_ref()
-        )
-        .fetch_optional(connection_pool.get_ref())
-        .await
-        .context("Failed to check email against subscriber database")?;
-    
+        new_subscriber.email.as_ref()
+    )
+    .fetch_optional(connection_pool.get_ref())
+    .await
+    .context("Failed to check email against subscriber database")?;
+
     match check_existing {
         None => (),
         Some(record) => {
-
             // If the existing subscriber already has a confirmed status, then exit with a success code
             if record.status == "confirmed" {
                 return Ok(HttpResponse::Ok().finish());
@@ -75,7 +75,10 @@ pub async fn subscribe(
                 .await
                 .context("Failed to store subscription token in database")?;
 
-            transaction.commit().await.context("Failed to commit SQL transaction to store a new subscriber")?;
+            transaction
+                .commit()
+                .await
+                .context("Failed to commit SQL transaction to store a new subscriber")?;
 
             send_confirmation_email(
                 &email_client,
@@ -83,10 +86,10 @@ pub async fn subscribe(
                 &base_url.0,
                 &subscription_token,
             )
-                .await
-                .context("Failed to send confirmation email")?;
-            
-                return Ok(HttpResponse::Ok().finish())
+            .await
+            .context("Failed to send confirmation email")?;
+
+            return Ok(HttpResponse::Ok().finish());
         }
     }
 
@@ -105,7 +108,8 @@ pub async fn subscribe(
         .await
         .context("Failed to store subscription token in database")?;
 
-    transaction.commit()
+    transaction
+        .commit()
         .await
         .context("Failed to commit SQL transaction to store a new subscriber")?;
 
@@ -117,7 +121,7 @@ pub async fn subscribe(
     )
     .await
     .context("Failed to send confirmation email")?;
-    
+
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -148,9 +152,7 @@ pub async fn insert_subscriber(
     )
     .execute(transaction)
     .await
-    .map_err(|e| {
-        e
-    })?;
+    .map_err(|e| e)?;
 
     Ok(subscriber_id)
 }
@@ -174,18 +176,55 @@ pub async fn store_token(
     )
     .execute(transaction)
     .await
-    .map_err(|e| {
-        StoreTokenError(e)
-    })?;
+    .map_err(|e| StoreTokenError(e))?;
 
     Ok(())
+}
+
+#[tracing::instrument(
+    name = "Send a confirmation email to a new subscriber",
+    skip(email_client, new_subscriber, base_url, subscription_token)
+)]
+pub async fn send_confirmation_email(
+    email_client: &EmailClient,
+    new_subscriber: NewSubscriber,
+    base_url: &str,
+    subscription_token: &str,
+) -> Result<(), reqwest::Error> {
+    let confirmation_link = format!(
+        "{}/subscribe/confirm?subscription_token={}",
+        base_url, subscription_token
+    );
+
+    let plain_body = format!(
+        "Welcome to our newsletter!\nVisit {} to confirm your subscription.",
+        confirmation_link
+    );
+    let html_body = format!(
+        "Welcome to our newsletter! <br />\
+        Click <a href=\"{}\">here</a> to confirm your subscription.",
+        confirmation_link
+    );
+
+    email_client
+        .send_email(new_subscriber.email, "Welcome", &html_body, &plain_body)
+        .await
+}
+
+/// Generate a random 25-character csae-sensitive subscription token for subscription confirmation
+fn generate_subscription_token() -> String {
+    let mut rng = thread_rng();
+    std::iter::repeat_with(|| rng.sample(Alphanumeric))
+        .map(char::from)
+        .take(25)
+        .collect()
 }
 
 #[derive(thiserror::Error)]
 pub enum SubscribeError {
     #[error("{0}")]
     ValidationError(String),
-    #[error("transparent")]
+    #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
 }
 
@@ -231,7 +270,7 @@ impl std::error::Error for StoreTokenError {
 // Goes through entire chain of errors and their sources, using the source method of the Error trait
 fn error_chain_fmt(
     e: &impl std::error::Error,
-    f: &mut std::fmt::Formatter<'_>
+    f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
     writeln!(f, "{}\n", e)?;
     let mut current = e.source();
@@ -240,43 +279,4 @@ fn error_chain_fmt(
         current = cause.source();
     }
     Ok(())
-}
-
-#[tracing::instrument(
-    name = "Send a confirmation email to a new subscriber",
-    skip(email_client, new_subscriber, base_url, subscription_token)
-)]
-pub async fn send_confirmation_email(
-    email_client: &EmailClient,
-    new_subscriber: NewSubscriber,
-    base_url: &str,
-    subscription_token: &str,
-) -> Result<(), reqwest::Error> {
-    let confirmation_link = format!(
-        "{}/subscribe/confirm?subscription_token={}",
-        base_url, subscription_token
-    );
-
-    let plain_body = format!(
-        "Welcome to our newsletter!\nVisit {} to confirm your subscription.",
-        confirmation_link
-    );
-    let html_body = format!(
-        "Welcome to our newsletter! <br />\
-        Click <a href=\"{}\">here</a> to confirm your subscription.",
-        confirmation_link
-    );
-
-    email_client
-        .send_email(new_subscriber.email, "Welcome", &html_body, &plain_body)
-        .await
-}
-
-/// Generate a random 25-character csae-sensitive subscription token for subscription confirmation
-fn generate_subscription_token() -> String {
-    let mut rng = thread_rng();
-    std::iter::repeat_with(|| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(25)
-        .collect()
 }

@@ -1,4 +1,7 @@
+use actix_web::http::StatusCode;
+use actix_web::ResponseError;
 use actix_web::{web, HttpResponse};
+use anyhow::Context;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -14,24 +17,19 @@ pub struct Parameters {
 pub async fn confirm(
     parameters: web::Query<Parameters>,
     connection_pool: web::Data<PgPool>,
-) -> HttpResponse {
-    let id = match get_subscriber_id_from_token(&connection_pool, &parameters.subscription_token)
+) -> Result<HttpResponse, ConfirmError> {
+    let id = get_subscriber_id_from_token(&connection_pool, &parameters.subscription_token)
         .await
-    {
-        Ok(id) => id,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+        .context("Failed to retrieve from database subscriber id based on subscription token")?;
 
     match id {
-        None => HttpResponse::Unauthorized().finish(),
+        None => Err(ConfirmError::SubscriptionIdNotFound),
         Some(subscriber_id) => {
-            if confirm_subscriber(&connection_pool, subscriber_id)
+            confirm_subscriber(&connection_pool, subscriber_id)
                 .await
-                .is_err()
-            {
-                return HttpResponse::InternalServerError().finish();
-            }
-            HttpResponse::Ok().finish()
+                .context("Failed to change confirmation status to confirmed for the subscriber")?;
+
+            Ok(HttpResponse::Ok().finish())
         }
     }
 }
@@ -82,4 +80,21 @@ pub async fn confirm_subscriber(
         e
     })?;
     Ok(())
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ConfirmError {
+    #[error(transparent)]
+    DatabaseError(#[from] anyhow::Error),
+    #[error("No subscriber found based on the given subscription token link")]
+    SubscriptionIdNotFound,
+}
+
+impl ResponseError for ConfirmError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            ConfirmError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ConfirmError::SubscriptionIdNotFound => StatusCode::UNAUTHORIZED,
+        }
+    }
 }

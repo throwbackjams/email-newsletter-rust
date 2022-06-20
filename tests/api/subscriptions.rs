@@ -129,7 +129,7 @@ async fn subscribing_twice_results_in_a_second_confirmation_email_sent() {
         .respond_with(ResponseTemplate::new(200))
         .mount(&test_app.email_server)
         .await;
-    
+
     // First time subscribing
     test_app.post_subscriptions(body.into()).await;
     // Second time subscribing
@@ -145,9 +145,14 @@ async fn subscribing_twice_results_in_a_second_confirmation_email_sent() {
     let confirmation_links_one = test_app.get_confirmation_links(email_one);
     let confirmation_links_two = test_app.get_confirmation_links(email_two);
 
-    assert_eq!(confirmation_links_one.html, confirmation_links_one.plain_text);
-    assert_eq!(confirmation_links_two.html, confirmation_links_two.plain_text);
-
+    assert_eq!(
+        confirmation_links_one.html,
+        confirmation_links_one.plain_text
+    );
+    assert_eq!(
+        confirmation_links_two.html,
+        confirmation_links_two.plain_text
+    );
 }
 
 #[tokio::test]
@@ -156,9 +161,9 @@ async fn subscribe_fails_if_there_is_a_fatal_database_error() {
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     sqlx::query!("ALTER TABLE subscription_tokens DROP COLUMN subscription_token;",)
-    .execute(&test_app.db_pool)
-    .await
-    .unwrap();
+        .execute(&test_app.db_pool)
+        .await
+        .unwrap();
 
     let response = test_app.post_subscriptions(body.into()).await;
 
