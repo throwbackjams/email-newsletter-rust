@@ -268,7 +268,7 @@ impl std::error::Error for StoreTokenError {
 }
 
 // Goes through entire chain of errors and their sources, using the source method of the Error trait
-fn error_chain_fmt(
+pub fn error_chain_fmt(
     e: &impl std::error::Error,
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
