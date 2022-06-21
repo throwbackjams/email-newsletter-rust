@@ -9,7 +9,7 @@ use crate::email_client::EmailClient;
 use anyhow::Context;
 use secrecy::{Secret, ExposeSecret};
 use base64;
-use sha3::Digest;
+use argon2::{Argon2, PasswordHash, PasswordVerifier };
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -119,31 +119,77 @@ async fn validate_credentials(
     credentials: Credentials,
     connection_pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
-    let password_hash = sha3::Sha3_256::digest(
-        credentials.password.expose_secret().as_bytes()
-    );
+    // let hasher = Argon2::new(
+    //     Algorithm::Argon2id,
+    //     Version::V0x13,
+    //     Params::new(15000, 2, 1, None)
+    //         .context("Failed to build Argon2 parameters")
+    //         .map_err(PublishError::UnexpectedError)?,
+    // );
 
-    // Convert GenericArray type to lowercase hexadecimal encoding
-    let password_hash = format!("{:x}", password_hash);
-    
-    let user_id: Option<_> = sqlx::query!(
+    let row: Option<_> = sqlx::query!(
         r#"
-        SELECT user_id
+        SELECT user_id, password_hash
         FROM users
-        WHERE username = $1 AND password_hash = $2
+        WHERE username = $1
         "#,
         credentials.username,
-        password_hash,
     )
     .fetch_optional(connection_pool)
     .await
-    .context("Failed to perform a query to validate auth credentials.")
+    .context("Failed to perform a query to retrieve stored credentials.")
     .map_err(PublishError::UnexpectedError)?;
 
-    user_id
-        .map(|row| row.user_id)
-        .ok_or_else(|| anyhow::anyhow!("Invalid username or password"))
-        .map_err(PublishError::AuthError)
+    let (expected_password_hash, user_id) = match row {
+        Some(row) => (row.password_hash, row.user_id),
+        None => {
+            return Err(PublishError::AuthError(anyhow::anyhow!("Unknown username.")));
+        }
+    };
+
+    let expected_password_hash = PasswordHash::new(&expected_password_hash)
+        .context("Failed to parse hash in PHC string format.")
+        .map_err(PublishError::UnexpectedError)?;
+    
+    Argon2::default()
+        .verify_password(credentials.password.expose_secret().as_bytes(), &expected_password_hash)
+        .context("Invalid password.")
+        .map_err(PublishError::AuthError)?;
+    
+    Ok(user_id)
+
+    // let password_hash = hasher
+    //     .hash_password(credentials.password.expose_secret().as_bytes(), salt)
+    //     .context("Failed to hash password")
+    //     .map_err(PublishError::UnexpectedError)?;
+    
+    // // Convert to lowercase hexadecimal encoding
+    // let password_hash = format!("{:x}", password_hash.hash.unwrap());
+
+    // if password_hash != expected_password_hash {
+    //     Err(PublishError::AuthError(anyhow::anyhow!("Invalid password.")))
+    // } else {
+    //     Ok(user_id)
+    // }
+    
+    // // let user_id: Option<_> = sqlx::query!(
+    // //     r#"
+    // //     SELECT user_id
+    // //     FROM users
+    // //     WHERE username = $1 AND password_hash = $2
+    // //     "#,
+    // //     credentials.username,
+    // //     password_hash,
+    // // )
+    // // .fetch_optional(connection_pool)
+    // // .await
+    // // .context("Failed to perform a query to validate auth credentials.")
+    // // .map_err(PublishError::UnexpectedError)?;
+
+    // // user_id
+    // //     .map(|row| row.user_id)
+    // //     .ok_or_else(|| anyhow::anyhow!("Invalid username or password"))
+    // //     .map_err(PublishError::AuthError)
 }
 
 struct ConfirmedSubscriber {
