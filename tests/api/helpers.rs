@@ -7,7 +7,7 @@ use zero2prod::configuration::DatabaseSettings;
 use zero2prod::startup::{get_connection_pool, Application};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use argon2::password_hash::SaltString;
-use argon2::{Argon2, PasswordHasher};
+use argon2::{Argon2, PasswordHasher, Algorithm, Params, Version};
 
 //Ensurce that tracing stack is only initialized once
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -28,7 +28,7 @@ pub struct TestApp {
     pub db_pool: PgPool,
     pub email_server: MockServer,
     pub port: u16,
-    test_user: TestUser,
+    pub test_user: TestUser,
 }
 
 /// Confirmation links embedded in the request to the email API
@@ -169,10 +169,14 @@ impl TestUser {
     async fn store(&self, connection_pool: &PgPool) {
         let salt = SaltString::generate(&mut rand::thread_rng());
 
-        let password_hash = Argon2::default()
-            .hash_password(self.password.as_bytes(), &salt)
-            .unwrap()
-            .to_string();
+        let password_hash = Argon2::new(
+            Algorithm::Argon2id,
+            Version::V0x13,
+            Params::new(15000, 2, 1, None).unwrap()
+        )
+        .hash_password(self.password.as_bytes(), &salt)
+        .unwrap()
+        .to_string();
 
         sqlx::query!(
             "INSERT INTO users (user_id, username, password_hash)

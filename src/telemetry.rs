@@ -3,6 +3,7 @@ use tracing::Subscriber;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::{fmt::MakeWriter, layer::SubscriberExt, EnvFilter, Registry};
+use tokio::task::JoinHandle;
 
 pub fn get_subscriber<Sink>(
     name: String,
@@ -29,4 +30,14 @@ pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
     //Redirect all log events in dependencies to our subscriber
     LogTracer::init().expect("Failed to set logger");
     set_global_default(subscriber).expect("Failed to set subscriber");
+}
+
+// Same trait bounds and signature as 'spawn_blocking'
+pub fn spawn_blocking_with_tracing<F, R>(f: F) -> JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let current_span = tracing::Span::current();
+    tokio::task::spawn_blocking(move || current_span.in_scope(f))
 }
