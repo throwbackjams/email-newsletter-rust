@@ -29,6 +29,7 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub port: u16,
     pub test_user: TestUser,
+    pub api_client: reqwest::Client
 }
 
 /// Confirmation links embedded in the request to the email API
@@ -39,7 +40,7 @@ pub struct ConfirmationLinks {
 
 impl TestApp {
     pub async fn post_subscriptions(&self, body: String) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(&format!("{}/subscribe", &self.address))
             .header("Content-type", "application/x-www-form-urlencoded")
             .body(body)
@@ -73,7 +74,7 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(&format!("{}/newsletters", &self.address))
             // Random auth for now
             .basic_auth(&self.test_user.username, Some(&self.test_user.password))
@@ -81,6 +82,29 @@ impl TestApp {
             .send()
             .await
             .expect("Failed to execute request")
+    }
+
+    pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/login", &self.address))
+            .form(body) // this method makes sure URL-encoded and Content-Type header is set
+            .send()
+            .await
+            .expect("Failed to execute post_login request")
+    }
+
+    pub async fn get_login_html(&self) -> String {
+        self.api_client
+            .get(&format!("{}/login", &self.address))
+            .send()
+            .await
+            .expect("Failed to get login html")
+            .text()
+            .await
+            .unwrap()
     }
 }
 
@@ -115,12 +139,19 @@ pub async fn spawn_app() -> TestApp {
 
     let test_user = TestUser::generate();
 
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .cookie_store(true)
+        .build()
+        .unwrap();
+
     let test_app = TestApp {
         address: format!("http://localhost:{}", application_port),
         db_pool: get_connection_pool(&configuration.database),
         email_server,
         port: application_port,
-        test_user
+        test_user,
+        api_client: client,
         };
     
     test_app.test_user.store(&test_app.db_pool).await;
@@ -189,5 +220,10 @@ impl TestUser {
         .await
         .expect("Failed to create test user");
     }
+}
+
+pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("Location").unwrap(), location);
 }
 
