@@ -10,6 +10,7 @@ use tracing::log::Log;
 use crate::routes::error_chain_fmt;
 use actix_web::error::InternalError;
 use actix_web::cookie::Cookie;
+use crate::session_state::TypedSession;
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -18,13 +19,14 @@ pub struct FormData {
 }
 
 #[tracing::instrument(
-    skip(form, connection_pool, secret),
+    skip(form, connection_pool, secret, session),
     fields(username=tracing::field::Empty, user_id=tracing::field::Empty) //TODO! Understand what this does
 )]
 pub async fn login(
     form: web::Form<FormData>,
     connection_pool: web::Data<PgPool>,
     secret: web::Data<HmacSecret>,
+    session: TypedSession,
 ) -> Result<HttpResponse, InternalError<LoginError>> {
 
     let credentials = Credentials {
@@ -39,9 +41,14 @@ pub async fn login(
         {
             Ok(user_id) => {
                 tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
+                session.renew(); // Rorate the session token when a user logs in
+                session
+                    .insert_user_id(user_id) // Create session
+                    .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into())))?;
+                
                 Ok(HttpResponse::SeeOther()
-                .insert_header((LOCATION, "/"))
-                .finish())
+                    .insert_header((LOCATION, "/admin/dashboard"))
+                    .finish())
 
             },
             Err(e) => {
@@ -61,6 +68,15 @@ pub async fn login(
                 Err(InternalError::from_response(e, response))
             }
         }
+}
+
+// Redirect to login page with an error message
+fn login_redirect(e: LoginError) -> InternalError<LoginError> {
+    FlashMessage::error(e.to_string()).send();
+    let response = HttpResponse::SeeOther()
+        .insert_header((LOCATION, "/login"))
+        .finish();
+    InternalError::from_response(e, response)
 }
 
 #[derive(thiserror::Error)]
