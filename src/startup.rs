@@ -2,7 +2,8 @@ use crate::configuration::{DatabaseSettings, Settings};
 use crate::{
     email_client::EmailClient,
     routes::{
-        home, login_form, login, confirm, health_check, subscribe, publish_newsletter, admin_dashboard, change_password_form, change_password},
+        home, login_form, login, confirm, health_check, subscribe, 
+        publish_newsletter, admin_dashboard, change_password_form, change_password, log_out},
 };
 use actix_web::{dev::Server, web, App, HttpServer};
 use actix_web_flash_messages::storage::CookieMessageStore;
@@ -107,6 +108,7 @@ pub async fn run(
             .route("/admin/dashboard", web::get().to(admin_dashboard))
             .route("/admin/password", web::get().to(change_password_form))
             .route("/admin/password", web::post().to(change_password))
+            .route("/admin/logout", web::post().to(log_out))
             .app_data(connection_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())

@@ -39,7 +39,7 @@ pub async fn change_password(
 
     let credentials = Credentials {
         username,
-        password: form.0.current_password,
+        password: form.0.current_password.clone(),
     };
 
     if let Err(e) = validate_credentials(credentials, &connection_pool).await {
@@ -51,6 +51,21 @@ pub async fn change_password(
             AuthError::UnexpectedError(_) => Err(e500(e).into()),
         }
     }
+
+    let new_password_length = form.new_password.expose_secret().len();
+
+    if new_password_length <= 12 || new_password_length >= 256 {
+        FlashMessage::error(
+            "The new password must be longer than 12 characters and shorter than 128 characters.",
+        )
+        .send();
+
+        return Ok(see_other("/admin/password"));
+    } 
     
-    todo!()
+    crate::authentication::change_password(user_id, form.0.new_password, &connection_pool)
+        .await
+        .map_err(e500)?;
+    FlashMessage::error("Your password has been changed.").send();
+    Ok(see_other("/admin/password"))
 }
