@@ -1,15 +1,12 @@
 use crate::authentication::{validate_credentials, Credentials, AuthError};
-use crate::startup::HmacSecret;
 use actix_web::{web, HttpResponse, ResponseError};
 use actix_web::http::header::LOCATION;
 use actix_web::http::StatusCode;
 use actix_web_flash_messages::FlashMessage;
-use secrecy::{Secret, ExposeSecret};
+use secrecy::Secret;
 use sqlx::PgPool;
-use tracing::log::Log;
 use crate::routes::error_chain_fmt;
 use actix_web::error::InternalError;
-use actix_web::cookie::Cookie;
 use crate::session_state::TypedSession;
 
 #[derive(serde::Deserialize)]
@@ -19,13 +16,12 @@ pub struct FormData {
 }
 
 #[tracing::instrument(
-    skip(form, connection_pool, secret, session),
+    skip(form, connection_pool, session),
     fields(username=tracing::field::Empty, user_id=tracing::field::Empty) //TODO! Understand what this does
 )]
 pub async fn login(
     form: web::Form<FormData>,
     connection_pool: web::Data<PgPool>,
-    secret: web::Data<HmacSecret>,
     session: TypedSession,
 ) -> Result<HttpResponse, InternalError<LoginError>> {
 
@@ -105,9 +101,5 @@ impl ResponseError for LoginError {
     
     fn status_code(&self) -> StatusCode {
         StatusCode::SEE_OTHER
-        // match self {
-        //     LoginError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        //     LoginError::AuthError(_) => StatusCode::UNAUTHORIZED,
-        // }
     }
 }
