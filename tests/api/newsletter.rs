@@ -1,4 +1,4 @@
-use crate::helpers::{spawn_app, TestApp, ConfirmationLinks, assert_is_redirect_to};
+use crate::helpers::{assert_is_redirect_to, spawn_app, ConfirmationLinks, TestApp};
 use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -14,8 +14,9 @@ async fn create_unconfirmed_subscriber(test_app: &TestApp) -> ConfirmationLinks 
         .expect(1)
         .mount_as_scoped(&test_app.email_server)
         .await;
-    
-    test_app.post_subscriptions(body.into())
+
+    test_app
+        .post_subscriptions(body.into())
         .await
         .error_for_status()
         .unwrap();
@@ -27,9 +28,8 @@ async fn create_unconfirmed_subscriber(test_app: &TestApp) -> ConfirmationLinks 
         .unwrap()
         .pop()
         .unwrap();
-    
+
     test_app.get_confirmation_links(email_request)
-    
 }
 
 async fn create_confirmed_subscriber(test_app: &TestApp) {
@@ -52,9 +52,9 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
         .expect(0) // No request should be fired at Postmark
         .mount(&test_app.email_server)
         .await;
-    
+
     test_app.login().await;
-    
+
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
         "html_content": "<p>Newsletter body as HTML</p>",
@@ -63,7 +63,6 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 
     let response = test_app.post_newsletters(&newsletter_request_body).await;
     assert_is_redirect_to(&response, "/admin/newsletters");
-
 }
 
 #[tokio::test]
@@ -79,19 +78,18 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
         .await;
 
     test_app.login().await;
-    
+
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
         "html_content": "<p>Newsletter body as HTML</p>",
         "text_content": "Newsletter body as plain text",
     });
-    
+
     let response = test_app.post_newsletters(&newsletter_request_body).await;
     assert_is_redirect_to(&response, "/admin/newsletters");
 
     let html_page = test_app.get_admin_newsletters_html().await;
     assert!(html_page.contains("Your newsletter has been successfully sent"));
-
 }
 
 #[tokio::test]
@@ -100,22 +98,22 @@ async fn newsletters_returns_400_for_invalid_data() {
 
     let test_cases = vec![
         (
-        serde_json::json!({
-            "html_content": "<p>Newsletter body as HTML</p>",
-            "text_content": "Newsletter body as plain text",
-        }),
-        "missing title"),
-        (
-        serde_json::json!({
-            "title": "Newsletter title",
-            "text_content": "Newsletter body as plain text",
-        }),
-        "missing html content",
+            serde_json::json!({
+                "html_content": "<p>Newsletter body as HTML</p>",
+                "text_content": "Newsletter body as plain text",
+            }),
+            "missing title",
         ),
-        ];
+        (
+            serde_json::json!({
+                "title": "Newsletter title",
+                "text_content": "Newsletter body as plain text",
+            }),
+            "missing html content",
+        ),
+    ];
 
     test_app.login().await;
-
 
     for (invalid_body, error_message) in test_cases {
         let response = test_app.post_newsletters(&invalid_body).await;
@@ -124,7 +122,8 @@ async fn newsletters_returns_400_for_invalid_data() {
             response.status().as_u16(),
             400,
             "The newsletter API did not fail with 400 bad request when the payload was {}.",
-            error_message);
+            error_message
+        );
     }
 }
 
@@ -145,7 +144,7 @@ async fn sending_newsletter_while_not_logged_in_redirects_to_login() {
         "html_content": "<p>Newsletter body as HTML</p>",
         "text_content": "Newsletter body as plain text",
     });
-    
+
     let response = test_app.post_newsletters(&newsletter_request_body).await;
     assert_is_redirect_to(&response, "/login");
 }

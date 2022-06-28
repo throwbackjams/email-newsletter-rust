@@ -1,16 +1,18 @@
-use actix_web::{web, HttpResponse, http::header::ContentType};
-use uuid::Uuid;
+use crate::authentication::UserId;
+use crate::utils::e500;
+use actix_web::{http::header::ContentType, web, HttpResponse};
 use anyhow::Context;
 use sqlx::PgPool;
-use crate::utils::e500;
-use crate::authentication::UserId;
+use uuid::Uuid;
 
 pub async fn admin_dashboard(
     user_id: web::ReqData<UserId>,
     connection_pool: web::Data<PgPool>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let user_id = user_id.into_inner();
-    let username = get_username(*user_id, &connection_pool).await.map_err(e500)?;
+    let username = get_username(*user_id, &connection_pool)
+        .await
+        .map_err(e500)?;
 
     Ok(HttpResponse::Ok()
         .content_type(ContentType::html())
@@ -35,7 +37,7 @@ pub async fn admin_dashboard(
 </ol>
 </body>
 </html>"#
-    )))
+        )))
 }
 
 #[tracing::instrument(name = "Get username", skip(connection_pool))]
@@ -54,6 +56,6 @@ pub async fn get_username(
     .fetch_one(connection_pool)
     .await
     .context("Failed to perform a query to retrievew a username.")?;
-    
+
     Ok(row.username)
 }

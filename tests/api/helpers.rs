@@ -1,3 +1,5 @@
+use argon2::password_hash::SaltString;
+use argon2::{Algorithm, Argon2, Params, PasswordHasher, Version};
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
@@ -6,8 +8,6 @@ use zero2prod::configuration::get_configuration;
 use zero2prod::configuration::DatabaseSettings;
 use zero2prod::startup::{get_connection_pool, Application};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
-use argon2::password_hash::SaltString;
-use argon2::{Argon2, PasswordHasher, Algorithm, Params, Version};
 
 //Ensurce that tracing stack is only initialized once
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -29,7 +29,7 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub port: u16,
     pub test_user: TestUser,
-    pub api_client: reqwest::Client
+    pub api_client: reqwest::Client,
 }
 
 /// Confirmation links embedded in the request to the email API
@@ -73,8 +73,9 @@ impl TestApp {
         ConfirmationLinks { html, plain_text }
     }
 
-    pub async fn post_newsletters<Body>(&self, body: &Body) -> reqwest::Response 
-    where Body: serde::Serialize
+    pub async fn post_newsletters<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
     {
         self.api_client
             .post(&format!("{}/admin/newsletters", &self.address))
@@ -115,8 +116,7 @@ impl TestApp {
             .expect("Failed to execute post_login request")
     }
 
-    pub async fn login(&self) -> reqwest::Response
-    {
+    pub async fn login(&self) -> reqwest::Response {
         let login_body = serde_json::json!({
             "username": &self.test_user.username,
             "password": &self.test_user.password
@@ -162,11 +162,11 @@ impl TestApp {
     }
 
     pub async fn post_change_password<Body>(&self, body: &Body) -> reqwest::Response
-        where
-            Body: serde::Serialize,
+    where
+        Body: serde::Serialize,
     {
         self.api_client
-            .post(&format!("{}/admin/password",self.address))
+            .post(&format!("{}/admin/password", self.address))
             .form(body)
             .send()
             .await
@@ -230,12 +230,11 @@ pub async fn spawn_app() -> TestApp {
         port: application_port,
         test_user,
         api_client: client,
-        };
-    
-    test_app.test_user.store(&test_app.db_pool).await;
-    
-    test_app
+    };
 
+    test_app.test_user.store(&test_app.db_pool).await;
+
+    test_app
 }
 
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
@@ -268,10 +267,10 @@ pub struct TestUser {
 
 impl TestUser {
     pub fn generate() -> Self {
-        Self { 
+        Self {
             user_id: Uuid::new_v4(),
-            username: Uuid::new_v4().to_string(), 
-            password: Uuid::new_v4().to_string()
+            username: Uuid::new_v4().to_string(),
+            password: Uuid::new_v4().to_string(),
         }
     }
 
@@ -281,7 +280,7 @@ impl TestUser {
         let password_hash = Argon2::new(
             Algorithm::Argon2id,
             Version::V0x13,
-            Params::new(15000, 2, 1, None).unwrap()
+            Params::new(15000, 2, 1, None).unwrap(),
         )
         .hash_password(self.password.as_bytes(), &salt)
         .unwrap()
@@ -304,4 +303,3 @@ pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
     assert_eq!(response.status().as_u16(), 303);
     assert_eq!(response.headers().get("Location").unwrap(), location);
 }
-

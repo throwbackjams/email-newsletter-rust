@@ -1,13 +1,13 @@
 use std::ops::Deref;
 
-use actix_web::{FromRequest, HttpMessage};
-use actix_web::error::InternalError;
-use actix_web_lab::middleware::Next;
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
+use actix_web::error::InternalError;
+use actix_web::{FromRequest, HttpMessage};
+use actix_web_lab::middleware::Next;
 
 use crate::session_state::TypedSession;
-use crate::utils::{see_other, e500};
+use crate::utils::{e500, see_other};
 use uuid::Uuid;
 
 // Wrapper to prevent conflicts in the type map used by middleware to pass information downstream
@@ -44,7 +44,7 @@ pub async fn reject_anonymous_users(
         Some(user_id) => {
             req.extensions_mut().insert(UserId(user_id)); // Insert UserId into typemap for use downstream
             next.call(req).await
-        },
+        }
         None => {
             let response = see_other("/login");
             let e = anyhow::anyhow!("The user is not logged in");
@@ -52,4 +52,3 @@ pub async fn reject_anonymous_users(
         }
     }
 }
-

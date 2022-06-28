@@ -1,4 +1,4 @@
-use crate::helpers::{spawn_app, assert_is_redirect_to};
+use crate::helpers::{assert_is_redirect_to, spawn_app};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use uuid::Uuid;
@@ -34,11 +34,12 @@ async fn new_password_fields_must_match() {
     let new_password = Uuid::new_v4().to_string();
     let other_new_password = Uuid::new_v4().to_string();
 
-    test_app.post_login(&serde_json::json!({
-        "username": &test_app.test_user.username,
-        "password": &test_app.test_user.password,
-    }))
-    .await;
+    test_app
+        .post_login(&serde_json::json!({
+            "username": &test_app.test_user.username,
+            "password": &test_app.test_user.password,
+        }))
+        .await;
 
     let body = serde_json::json!({
         "current_password": Uuid::new_v4().to_string(),
@@ -63,11 +64,12 @@ async fn current_password_must_be_valid() {
     let new_password = Uuid::new_v4().to_string();
     let wrong_password = Uuid::new_v4().to_string();
 
-    test_app.post_login(&serde_json::json!({
-        "username": &test_app.test_user.username,
-        "password": &test_app.test_user.password
-    }))
-    .await;
+    test_app
+        .post_login(&serde_json::json!({
+            "username": &test_app.test_user.username,
+            "password": &test_app.test_user.password
+        }))
+        .await;
 
     let body = serde_json::json!({
         "current_password": &wrong_password,
@@ -75,15 +77,12 @@ async fn current_password_must_be_valid() {
         "new_password_check": &new_password
     });
 
-    let response = test_app
-        .post_change_password(&body).await;
+    let response = test_app.post_change_password(&body).await;
 
     assert_is_redirect_to(&response, "/admin/password");
 
     let html_page = test_app.get_change_password_html().await;
-    assert!(html_page.contains(
-        "<p><i>The current password is incorrect.</i></p>"
-    ));
+    assert!(html_page.contains("<p><i>The current password is incorrect.</i></p>"));
 }
 
 #[tokio::test]
@@ -95,11 +94,12 @@ async fn new_password_must_be_longer_than_12_characters() {
         .map(char::from)
         .collect();
 
-    test_app.post_login(&serde_json::json!({
-        "username": &test_app.test_user.username,
-        "password": &test_app.test_user.password
-    }))
-    .await;
+    test_app
+        .post_login(&serde_json::json!({
+            "username": &test_app.test_user.username,
+            "password": &test_app.test_user.password
+        }))
+        .await;
 
     let body = serde_json::json!({
         "current_password": &test_app.test_user.password,
@@ -126,11 +126,12 @@ async fn new_password_must_be_shorter_than_256_characters() {
         .map(char::from)
         .collect();
 
-    test_app.post_login(&serde_json::json!({
-        "username": &test_app.test_user.username,
-        "password": &test_app.test_user.password
-    }))
-    .await;
+    test_app
+        .post_login(&serde_json::json!({
+            "username": &test_app.test_user.username,
+            "password": &test_app.test_user.password
+        }))
+        .await;
 
     let body = serde_json::json!({
         "current_password": &test_app.test_user.password,
@@ -189,5 +190,4 @@ async fn changing_password_works() {
     let response = test_app.post_login(&login_body).await;
     // Login with new password works
     assert_is_redirect_to(&response, "/admin/dashboard");
-
 }

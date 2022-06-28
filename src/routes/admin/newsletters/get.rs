@@ -1,20 +1,20 @@
-use actix_web::{HttpResponse, http::header::ContentType};
+use crate::utils::e500;
+use actix_web::{http::header::ContentType, HttpResponse};
 use actix_web_flash_messages::IncomingFlashMessages;
 use std::fmt::Write;
-use crate::utils::e500;
 
 pub async fn submit_newsletter_to_send_form(
-    flash_messages: IncomingFlashMessages
-) -> Result<HttpResponse, actix_web::Error>{
+    flash_messages: IncomingFlashMessages,
+) -> Result<HttpResponse, actix_web::Error> {
     let mut msg_html = String::new();
     for m in flash_messages.iter() {
         writeln!(msg_html, "<p><i>{}</i></p>", m.content()).map_err(e500)?;
     }
 
     Ok(HttpResponse::Ok()
-    .content_type(ContentType::html())
-    .body(format!(
-        r#"<!DOCTYPE html>
+        .content_type(ContentType::html())
+        .body(format!(
+            r#"<!DOCTYPE html>
 <html lang="en">
     <head>
         <meta http-equiv="content-type" content="text/html; charset=utf-8">
@@ -54,5 +54,5 @@ pub async fn submit_newsletter_to_send_form(
         <p><a href="/admin/dashboard">&lt;- Back</a></p>
     </body>
 </html>"#,
-    )))
+        )))
 }
