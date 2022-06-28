@@ -1,5 +1,4 @@
 use crate::helpers::{spawn_app, assert_is_redirect_to};
-use actix_web::dev::Response;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use uuid::Uuid;

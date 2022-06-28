@@ -31,6 +31,7 @@ pub async fn admin_dashboard(
             <input type="submit" value="Logout">
         </form>
     </li>
+    <li><a href="/admin/newsletters">Send a Newsletter</a></li>
 </ol>
 </body>
 </html>"#

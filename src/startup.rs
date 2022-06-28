@@ -1,9 +1,9 @@
 use crate::configuration::{DatabaseSettings, Settings};
+use crate::routes::send_newsletter;
 use crate::{
     email_client::EmailClient,
     routes::{
-        home, login_form, login, confirm, health_check, subscribe, 
-        publish_newsletter, admin_dashboard, change_password_form, change_password, log_out},
+        home, login_form, login, confirm, health_check, subscribe, admin_dashboard, change_password_form, change_password, log_out, submit_newsletter_to_send_form},
 };
 use actix_web::{dev::Server, web, App, HttpServer};
 use actix_web_flash_messages::storage::CookieMessageStore;
@@ -106,7 +106,6 @@ pub async fn run(
             .route("/health_check", web::get().to(health_check))
             .route("/subscribe", web::post().to(subscribe))
             .route("/subscribe/confirm", web::get().to(confirm))
-            .route("/newsletters", web::post().to(publish_newsletter))
             .service(
                 web::scope("/admin")
                     .wrap(from_fn(reject_anonymous_users))
@@ -114,6 +113,8 @@ pub async fn run(
                     .route("/dashboard", web::get().to(admin_dashboard))
                     .route("/password", web::post().to(change_password))
                     .route("/logout", web::post().to(log_out))
+                    .route("/newsletters", web::get().to(submit_newsletter_to_send_form))
+                    .route("/newsletters", web::post().to(send_newsletter))
             )
             .app_data(connection_pool.clone())
             .app_data(email_client.clone())

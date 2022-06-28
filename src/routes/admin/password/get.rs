@@ -40,7 +40,7 @@ pub async fn change_password_form(
         <label>Confirm new password
             <input
             type="password"
-            placeholder="Type the new password again"
+            placeholder="Enter new password again"
             name="new_password_check"
             >
         </label>

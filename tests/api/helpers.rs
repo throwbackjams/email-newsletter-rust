@@ -73,15 +73,34 @@ impl TestApp {
         ConfirmationLinks { html, plain_text }
     }
 
-    pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
+    pub async fn post_newsletters<Body>(&self, body: &Body) -> reqwest::Response 
+    where Body: serde::Serialize
+    {
         self.api_client
-            .post(&format!("{}/newsletters", &self.address))
-            // Random auth for now
-            .basic_auth(&self.test_user.username, Some(&self.test_user.password))
-            .json(&body)
+            .post(&format!("{}/admin/newsletters", &self.address))
+            .form(body)
             .send()
             .await
             .expect("Failed to execute request")
+    }
+
+    pub async fn get_admin_newsletters(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/admin/newsletters", &self.address))
+            .send()
+            .await
+            .expect("Failed to get admin newsletter page")
+    }
+
+    pub async fn get_admin_newsletters_html(&self) -> String {
+        self.api_client
+            .get(&format!("{}/admin/newsletters", &self.address))
+            .send()
+            .await
+            .expect("Failed to get admin newsletters")
+            .text()
+            .await
+            .unwrap()
     }
 
     pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
@@ -94,6 +113,21 @@ impl TestApp {
             .send()
             .await
             .expect("Failed to execute post_login request")
+    }
+
+    pub async fn login(&self) -> reqwest::Response
+    {
+        let login_body = serde_json::json!({
+            "username": &self.test_user.username,
+            "password": &self.test_user.password
+        });
+
+        self.api_client
+            .post(&format!("{}/login", &self.address))
+            .form(&login_body) // this method makes sure URL-encoded and Content-Type header is set
+            .send()
+            .await
+            .expect("Failed to login")
     }
 
     pub async fn get_login_html(&self) -> String {

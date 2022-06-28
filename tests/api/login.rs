@@ -1,7 +1,4 @@
 use crate::helpers::{spawn_app, assert_is_redirect_to};
-use reqwest::header::HeaderValue;
-use zero2prod::routes::admin_dashboard;
-use std::collections::HashSet;
 
 #[tokio::test]
 async fn an_error_flash_message_is_set_on_failure() {
