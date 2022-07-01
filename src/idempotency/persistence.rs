@@ -1,10 +1,10 @@
 use super::IdempotencyKey;
-use actix_web::HttpResponse;
-use actix_web::http::StatusCode;
-use sqlx::{PgPool, Transaction, Postgres};
-use sqlx::postgres::PgHasArrayType;
-use uuid::Uuid;
 use actix_web::body::to_bytes;
+use actix_web::http::StatusCode;
+use actix_web::HttpResponse;
+use sqlx::postgres::PgHasArrayType;
+use sqlx::{PgPool, Postgres, Transaction};
+use uuid::Uuid;
 
 #[derive(Debug, sqlx::Type)]
 #[sqlx(type_name = "header_pair")]
@@ -23,7 +23,7 @@ impl PgHasArrayType for HeaderPairRecord {
 }
 
 pub async fn get_saved_response(
-    connection_pool:&PgPool,
+    connection_pool: &PgPool,
     idempotency_key: &IdempotencyKey,
     user_id: Uuid,
 ) -> Result<Option<HttpResponse>, anyhow::Error> {
@@ -45,11 +45,9 @@ pub async fn get_saved_response(
     .fetch_optional(connection_pool)
     .await?;
     if let Some(r) = saved_response {
-        let status_code = StatusCode::from_u16(
-            r.response_status_code.try_into()?
-        )?;
+        let status_code = StatusCode::from_u16(r.response_status_code.try_into()?)?;
         let mut response = HttpResponse::build(status_code);
-        for HeaderPairRecord { name, value} in r.response_headers {
+        for HeaderPairRecord { name, value } in r.response_headers {
             response.append_header((name, value));
         }
         Ok(Some(response.body(r.response_body)))
@@ -76,7 +74,7 @@ pub async fn save_response(
         }
         h
     };
-    
+
     // Need to disable compile-time check due to inability for compiler to verify custom header type
     sqlx::query_unchecked!(
         r#"
@@ -97,28 +95,28 @@ pub async fn save_response(
     )
     .execute(&mut transaction)
     .await?;
-    
+
     // Commit the entire transaction (INSERT from try_processing and the UPDATE above)
     transaction.commit().await?;
 
     // Set body and convert HttpResponse<Bytes> to HttpResponse<BoxBody>
     let http_response = response_head.set_body(body).map_into_boxed_body();
     Ok(http_response)
-
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum NextAction {
     StartProcessing(Transaction<'static, Postgres>),
-    ReturnSavedResponse(HttpResponse)
+    ReturnSavedResponse(HttpResponse),
 }
 
 pub async fn try_processing(
-    connection_pool:&PgPool,
+    connection_pool: &PgPool,
     idempotency_key: &IdempotencyKey,
     user_id: Uuid,
 ) -> Result<NextAction, anyhow::Error> {
     let mut transaction = connection_pool.begin().await?;
-    
+
     // Note - by using Transaction<Postgres>, if a second request comes in right after a first request,
     // the second request will wait for the first updating transaction to commit or roll back
     // If the first transaction commits, second request will "DO NOTHING". If the first rolls back,
@@ -147,9 +145,7 @@ pub async fn try_processing(
     } else {
         let saved_response = get_saved_response(connection_pool, idempotency_key, user_id)
             .await?
-            .ok_or_else(||
-                anyhow::anyhow!("We expected a saved response, we didn't find it")
-            )?;
+            .ok_or_else(|| anyhow::anyhow!("We expected a saved response, we didn't find it"))?;
         Ok(NextAction::ReturnSavedResponse(saved_response))
     }
 }

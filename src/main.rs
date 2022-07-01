@@ -17,24 +17,21 @@ async fn main() -> anyhow::Result<()> {
     let application_task = tokio::spawn(application.run_until_stopped());
     let worker_task = tokio::spawn(worker);
 
-    // tokio::select! gets both tasks to make progress concurrently. 
+    // tokio::select! gets both tasks to make progress concurrently.
     // tokio::select! returns when one of the two tasks completes or errors out
     // If one runs all async expressions on the current task, expressions run concurrently but not in parallel.
     // Therefore, if one branch blocks the thread, all other expressions will be unable to continue
-    // To enable parallelism, spawn each async expression to a separate thread 
+    // To enable parallelism, spawn each async expression to a separate thread
     // and pass the join handle to tokio::select!
-    tokio::select!{
-        _ = application_task => {},
-        _ = worker_task => {},
+    tokio::select! {
+        o = application_task => report_exit("API", o),
+        o = worker_task => report_exit("Background worker", o),
     };
 
     Ok(())
 }
 
-fn report_exit(
-    task_name: &str,
-    outcome: Result<Result<(), impl Debug + Display>, JoinError>
-) {
+fn report_exit(task_name: &str, outcome: Result<Result<(), impl Debug + Display>, JoinError>) {
     match outcome {
         Ok(Ok(())) => {
             tracing::info!("{} has exited", task_name)

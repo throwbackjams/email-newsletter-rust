@@ -1,11 +1,14 @@
 use std::time::Duration;
-use tracing::Span;
 use tracing::field::display;
+use tracing::Span;
 
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::{email_client::EmailClient, domain::SubscriberEmail, configuration::Settings, startup::get_connection_pool};
+use crate::{
+    configuration::Settings, domain::SubscriberEmail, email_client::EmailClient,
+    startup::get_connection_pool,
+};
 
 pub enum ExecutionOutcome {
     TaskCompleted,
@@ -22,7 +25,7 @@ pub enum ExecutionOutcome {
 )]
 pub async fn try_execute_task(
     connection_pool: &PgPool,
-    email_client: &EmailClient
+    email_client: &EmailClient,
 ) -> Result<ExecutionOutcome, anyhow::Error> {
     let task = dequeue_task(connection_pool).await?;
     if task.is_none() {
@@ -30,20 +33,20 @@ pub async fn try_execute_task(
     }
 
     let (transaction, issue_id, email) = task.unwrap();
-    
+
     Span::current()
         .record("newsletter_issue_id", &display(issue_id))
         .record("subscriber_email", &display(&email));
-    
+
     match SubscriberEmail::parse(email.clone()) {
         Ok(email) => {
             let issue = get_issue(connection_pool, issue_id).await?;
             match email_client
                 .send_email(
                     &email,
-                    &issue.title, 
-                    &issue.html_content, 
-                    &issue.text_content
+                    &issue.title,
+                    &issue.html_content,
+                    &issue.text_content,
                 )
                 .await
             {
@@ -62,10 +65,10 @@ pub async fn try_execute_task(
         }
         Err(e) => {
             tracing::error!(
-                error.cause_chain = ?e,
-                error.message = %3,
-                "Skipping a confirmed subscriber. The stored email address is invalid"
-                );
+            error.cause_chain = ?e,
+            error.message = %3,
+            "Skipping a confirmed subscriber. The stored email address is invalid"
+            );
         }
     }
     Ok(ExecutionOutcome::TaskCompleted)
@@ -78,7 +81,7 @@ async fn dequeue_task(
     connection_pool: &PgPool,
 ) -> Result<Option<(PgTransaction, Uuid, String)>, anyhow::Error> {
     let mut transaction = connection_pool.begin().await?;
-    
+
     // Lock the row with FOR UPDATE and skip locked rows with SKIP LOCKED
     let r = sqlx::query!(
         r#"
@@ -133,7 +136,7 @@ struct NewsletterIssue {
 #[tracing::instrument(skip_all)]
 async fn get_issue(
     connection_pool: &PgPool,
-    issue_id: Uuid
+    issue_id: Uuid,
 ) -> Result<NewsletterIssue, anyhow::Error> {
     let r = sqlx::query!(
         r#"
@@ -149,14 +152,14 @@ async fn get_issue(
     let issue = NewsletterIssue {
         title: r.title,
         text_content: r.text_content,
-        html_content: r.html_content
+        html_content: r.html_content,
     };
     Ok(issue)
 }
 
 async fn worker_loop(
     connection_pool: PgPool,
-    email_client: EmailClient
+    email_client: EmailClient,
 ) -> Result<(), anyhow::Error> {
     loop {
         match try_execute_task(&connection_pool, &email_client).await {
@@ -171,15 +174,8 @@ async fn worker_loop(
     }
 }
 
-pub async fn run_worker_until_stopped(
-    configuration: Settings
-) -> Result<(), anyhow::Error> {
+pub async fn run_worker_until_stopped(configuration: Settings) -> Result<(), anyhow::Error> {
     let connection_pool = get_connection_pool(&configuration.database);
-    let sender_email = configuration
-        .email_client
-        .sender()
-        .expect("Invalid sender email address.");
-    let timeout = configuration.email_client.timeout();
     let email_client = configuration.email_client.client();
     worker_loop(connection_pool, email_client).await
 }

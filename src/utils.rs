@@ -18,7 +18,7 @@ pub fn see_other(location: &str) -> HttpResponse {
 // Return a 400 with user-representation of the validation error as body.
 // Error root cause is preserved for loggin
 pub fn e400<T>(e: T) -> actix_web::Error
-where 
+where
     T: std::fmt::Debug + std::fmt::Display + 'static,
 {
     actix_web::error::ErrorBadRequest(e)

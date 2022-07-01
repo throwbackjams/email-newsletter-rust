@@ -1,10 +1,10 @@
 use crate::helpers::{assert_is_redirect_to, spawn_app, ConfirmationLinks, TestApp};
-use fake::Fake;
 use fake::faker::internet::en::SafeEmail;
 use fake::faker::name::en::Name;
-use wiremock::matchers::{any, method, path};
-use wiremock::{Mock, ResponseTemplate, MockBuilder};
+use fake::Fake;
 use std::time::Duration;
+use wiremock::matchers::{any, method, path};
+use wiremock::{Mock, MockBuilder, ResponseTemplate};
 
 async fn create_unconfirmed_subscriber(test_app: &TestApp) -> ConfirmationLinks {
     let name: String = Name().fake();
@@ -185,7 +185,7 @@ async fn newsletter_creation_is_idempotent() {
         .expect(1)
         .mount(&test_app.email_server)
         .await;
-    
+
     let newsletter_request_body = serde_json::json!({
         "title": "Newsletter title",
         "html_content": "<p>Newsletter body as HTML</p>",
@@ -209,7 +209,6 @@ async fn newsletter_creation_is_idempotent() {
     test_app.dispatch_all_pending_emails().await;
 
     // Mock verifies that the newsletter has been sent only once
-
 }
 
 #[tokio::test]
@@ -236,7 +235,10 @@ async fn concurrent_form_submission_is_handled_gracefully() {
     let response2 = test_app.post_newsletters(&newsletter_request_body).await;
 
     assert_eq!(response1.status(), response2.status());
-    assert_eq!(response1.text().await.unwrap(), response2.text().await.unwrap());
+    assert_eq!(
+        response1.text().await.unwrap(),
+        response2.text().await.unwrap()
+    );
 
     test_app.dispatch_all_pending_emails().await;
 

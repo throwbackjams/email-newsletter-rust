@@ -1,4 +1,4 @@
-use crate::{utils::e500, idempotency};
+use crate::utils::e500;
 use actix_web::{http::header::ContentType, HttpResponse};
 use actix_web_flash_messages::IncomingFlashMessages;
 use std::fmt::Write;

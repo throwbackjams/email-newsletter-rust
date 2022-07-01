@@ -1,17 +1,15 @@
 use crate::authentication::UserId;
+use crate::idempotency::{save_response, try_processing, IdempotencyKey, NextAction};
 use crate::routes::error_chain_fmt;
-use crate::{domain::SubscriberEmail, utils::see_other};
+use crate::utils::see_other;
+use crate::utils::{e400, e500};
 use actix_web::web::ReqData;
 use actix_web::{web, HttpResponse, ResponseError};
 use actix_web_flash_messages::FlashMessage;
 use anyhow::Context;
 use reqwest::StatusCode;
-use sqlx::{PgPool, Transaction, Postgres};
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
-use crate::idempotency::{IdempotencyKey, get_saved_response, save_response, try_processing, NextAction};
-use crate::utils::{e400, e500};
-
-use crate::email_client::EmailClient;
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -31,7 +29,12 @@ pub async fn send_newsletter(
     connection_pool: web::Data<PgPool>,
     user_id: ReqData<UserId>,
 ) -> Result<HttpResponse, PublishError> {
-    let FormData { title, html_content, text_content, idempotency_key } = form.0;
+    let FormData {
+        title,
+        html_content,
+        text_content,
+        idempotency_key,
+    } = form.0;
     let user_id = user_id.into_inner();
     let idempotency_key: IdempotencyKey = idempotency_key.try_into().map_err(e400)?;
 
@@ -50,7 +53,7 @@ pub async fn send_newsletter(
         .await
         .context("Failed to store newsletter issue details")
         .map_err(e500)?;
-    
+
     enqueue_delivery_tasks(&mut transaction, issue_id)
         .await
         .context("Failed to enqueue delivery tasks")
@@ -85,10 +88,8 @@ impl ResponseError for PublishError {
         match self {
             PublishError::UnexpectedError(_) => {
                 HttpResponse::new(StatusCode::INTERNAL_SERVER_ERROR)
-            },
-            PublishError::IdempotencyKeyError(_) => {
-                HttpResponse::new(StatusCode::BAD_REQUEST)
             }
+            PublishError::IdempotencyKeyError(_) => HttpResponse::new(StatusCode::BAD_REQUEST),
         }
     }
 }
