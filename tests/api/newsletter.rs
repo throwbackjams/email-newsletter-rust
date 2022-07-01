@@ -1,13 +1,22 @@
 use crate::helpers::{assert_is_redirect_to, spawn_app, ConfirmationLinks, TestApp};
+use fake::Fake;
+use fake::faker::internet::en::SafeEmail;
+use fake::faker::name::en::Name;
 use wiremock::matchers::{any, method, path};
-use wiremock::{Mock, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate, MockBuilder};
 use std::time::Duration;
 
 async fn create_unconfirmed_subscriber(test_app: &TestApp) -> ConfirmationLinks {
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let name: String = Name().fake();
+    let email: String = SafeEmail().fake();
+    let body = serde_urlencoded::to_string(&serde_json::json!({
+        "name": name,
+        "email": email
+    }))
+    .unwrap();
 
     // Use mock guard and mount_as_scoped instead of mount to drop this server / not interfere with server in "main" test
-    // Confirm that confirmation email was sent out to /email server after new individual subscribers
+    // Confirm that confirmation email was sent out to /email server after new individual sub&scribers
     let _mock_guard = Mock::given(path("/email"))
         .and(method("POST"))
         .respond_with(ResponseTemplate::new(200))
@@ -65,6 +74,13 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
 
     let response = test_app.post_newsletters(&newsletter_request_body).await;
     assert_is_redirect_to(&response, "/admin/newsletters");
+
+    let html_page = test_app.get_admin_newsletters_html().await;
+    assert!(html_page.contains("The newsletter issue has been accepted"));
+
+    test_app.dispatch_all_pending_emails().await;
+
+    // Mock verifies on Drop that no newsletters were sent
 }
 
 #[tokio::test]
@@ -92,7 +108,9 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
     assert_is_redirect_to(&response, "/admin/newsletters");
 
     let html_page = test_app.get_admin_newsletters_html().await;
-    assert!(html_page.contains("Your newsletter has been successfully sent"));
+    assert!(html_page.contains("The newsletter issue has been accepted"));
+
+    test_app.dispatch_all_pending_emails().await;
 }
 
 #[tokio::test]
@@ -179,14 +197,16 @@ async fn newsletter_creation_is_idempotent() {
     assert_is_redirect_to(&response, "/admin/newsletters");
 
     let html_page = test_app.get_admin_newsletters_html().await;
-    assert!(html_page.contains("Your newsletter has been successfully sent"));
+    assert!(html_page.contains("The newsletter issue has been accepted"));
 
     // Submit newsletter form *again*
     let response = test_app.post_newsletters(&newsletter_request_body).await;
     assert_is_redirect_to(&response, "/admin/newsletters");
 
-    // let html_page = test_app.get_admin_newsletters_html().await;
-    // assert!(html_page.contains("Your newsletter has been successfully sent"));
+    let html_page = test_app.get_admin_newsletters_html().await;
+    assert!(html_page.contains("The newsletter issue has been accepted"));
+
+    test_app.dispatch_all_pending_emails().await;
 
     // Mock verifies that the newsletter has been sent only once
 
@@ -218,5 +238,11 @@ async fn concurrent_form_submission_is_handled_gracefully() {
     assert_eq!(response1.status(), response2.status());
     assert_eq!(response1.text().await.unwrap(), response2.text().await.unwrap());
 
+    test_app.dispatch_all_pending_emails().await;
+
     // Mock verifies on Drop that only one newsetter was sent
+}
+
+fn when_sending_an_email() -> MockBuilder {
+    Mock::given(path("/email")).and(method("POST"))
 }

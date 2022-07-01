@@ -36,13 +36,7 @@ impl Application {
 
         let response_timeout = configuration.email_client.timeout();
 
-        let email_client = EmailClient::new(
-            configuration.clone().email_client.base_url,
-            sender_email,
-            configuration.clone().email_client.authorization_token,
-            response_timeout,
-        );
-
+        let email_client = configuration.email_client.client();
         let address = format!(
             "{}:{}",
             configuration.application.host, configuration.application.port
