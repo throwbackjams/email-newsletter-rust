@@ -1,4 +1,4 @@
-use crate::utils::e500;
+use crate::{utils::e500, idempotency};
 use actix_web::{http::header::ContentType, HttpResponse};
 use actix_web_flash_messages::IncomingFlashMessages;
 use std::fmt::Write;
@@ -6,6 +6,7 @@ use std::fmt::Write;
 pub async fn submit_newsletter_to_send_form(
     flash_messages: IncomingFlashMessages,
 ) -> Result<HttpResponse, actix_web::Error> {
+    let idempotency_key = uuid::Uuid::new_v4();
     let mut msg_html = String::new();
     for m in flash_messages.iter() {
         writeln!(msg_html, "<p><i>{}</i></p>", m.content()).map_err(e500)?;
@@ -49,6 +50,7 @@ pub async fn submit_newsletter_to_send_form(
                 ></textarea>
             </label>
             <br>
+            <input hidden type="text" name="idempotency_key" value="{idempotency_key}">
             <button type="submit">Send Newsletter</button>
         </form>
         <p><a href="/admin/dashboard">&lt;- Back</a></p>

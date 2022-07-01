@@ -7,6 +7,8 @@ use actix_web_flash_messages::FlashMessage;
 use anyhow::Context;
 use reqwest::StatusCode;
 use sqlx::PgPool;
+use crate::idempotency::{IdempotencyKey, get_saved_response, save_response, try_processing, NextAction};
+use crate::utils::{e400, e500};
 
 use crate::email_client::EmailClient;
 
@@ -15,6 +17,7 @@ pub struct FormData {
     title: String,
     html_content: String,
     text_content: String,
+    idempotency_key: String,
 }
 
 #[tracing::instrument(
@@ -28,12 +31,30 @@ pub async fn send_newsletter(
     email_client: web::Data<EmailClient>,
     user_id: ReqData<UserId>,
 ) -> Result<HttpResponse, PublishError> {
-    // Get confirmed subscribers and newsletter components from FormData
-    let confirmed_subscribers = get_confirmed_subscribers(&connection_pool).await?;
-    let title = form.0.title;
-    let html_content = form.0.html_content;
-    let text_content = form.0.text_content;
+    let FormData { title, html_content, text_content, idempotency_key } = form.0;
+    let user_id = user_id.into_inner();
+    let idempotency_key: IdempotencyKey = idempotency_key.try_into().map_err(e400)?;
 
+    let transaction = match try_processing(&connection_pool, &idempotency_key, *user_id)
+        .await
+        .map_err(e500)?
+    {
+        NextAction::StartProcessing(t) => t,
+        NextAction::ReturnSavedResponse(saved_response) => {
+            success_message().send();
+            return Ok(saved_response);
+        }
+    };
+
+    // if let Some(saved_response) = get_saved_response(&connection_pool, &idempotency_key, *user_id)
+    //     .await
+    //     .map_err(e500)? 
+    // {
+    //     return Ok(saved_response)
+    // }
+
+    // Get confirmed subscribers
+    let confirmed_subscribers = get_confirmed_subscribers(&connection_pool).await?;
     // Send the newsletter to each confirmed subscriber
     for subscriber in confirmed_subscribers {
         match subscriber {
@@ -56,8 +77,12 @@ pub async fn send_newsletter(
     }
 
     // After successfully sending a newsletter, redirect to the send newsletter form with a successful message
-    FlashMessage::info("Your newsletter has been successfully sent.").send();
-    Ok(see_other("/admin/newsletters"))
+    success_message().send();
+    let response = see_other("/admin/newsletters");
+    let response = save_response(transaction, &idempotency_key, *user_id, response)
+        .await
+        .map_err(e500)?;
+    Ok(response)
 }
 
 struct ConfirmedSubscriber {
@@ -91,6 +116,8 @@ async fn get_confirmed_subscribers(
 pub enum PublishError {
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
+    #[error(transparent)]
+    IdempotencyKeyError(#[from] actix_web::Error),
 }
 
 impl std::fmt::Debug for PublishError {
@@ -105,7 +132,14 @@ impl ResponseError for PublishError {
         match self {
             PublishError::UnexpectedError(_) => {
                 HttpResponse::new(StatusCode::INTERNAL_SERVER_ERROR)
+            },
+            PublishError::IdempotencyKeyError(_) => {
+                HttpResponse::new(StatusCode::BAD_REQUEST)
             }
         }
     }
+}
+
+fn success_message() -> FlashMessage {
+    FlashMessage::info("Your newsletter has been successfully sent.")
 }

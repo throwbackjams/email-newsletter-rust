@@ -1,6 +1,7 @@
 use crate::helpers::{assert_is_redirect_to, spawn_app, ConfirmationLinks, TestApp};
 use wiremock::matchers::{any, method, path};
 use wiremock::{Mock, ResponseTemplate};
+use std::time::Duration;
 
 async fn create_unconfirmed_subscriber(test_app: &TestApp) -> ConfirmationLinks {
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
@@ -59,6 +60,7 @@ async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {
         "title": "Newsletter title",
         "html_content": "<p>Newsletter body as HTML</p>",
         "text_content": "Newsletter body as plain text",
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
     });
 
     let response = test_app.post_newsletters(&newsletter_request_body).await;
@@ -83,6 +85,7 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
         "title": "Newsletter title",
         "html_content": "<p>Newsletter body as HTML</p>",
         "text_content": "Newsletter body as plain text",
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
     });
 
     let response = test_app.post_newsletters(&newsletter_request_body).await;
@@ -101,6 +104,7 @@ async fn newsletters_returns_400_for_invalid_data() {
             serde_json::json!({
                 "html_content": "<p>Newsletter body as HTML</p>",
                 "text_content": "Newsletter body as plain text",
+                "idempotency_key": uuid::Uuid::new_v4().to_string()
             }),
             "missing title",
         ),
@@ -108,6 +112,7 @@ async fn newsletters_returns_400_for_invalid_data() {
             serde_json::json!({
                 "title": "Newsletter title",
                 "text_content": "Newsletter body as plain text",
+                "idempotency_key": uuid::Uuid::new_v4().to_string()
             }),
             "missing html content",
         ),
@@ -143,8 +148,75 @@ async fn sending_newsletter_while_not_logged_in_redirects_to_login() {
         "title": "Newsletter title",
         "html_content": "<p>Newsletter body as HTML</p>",
         "text_content": "Newsletter body as plain text",
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
     });
 
     let response = test_app.post_newsletters(&newsletter_request_body).await;
     assert_is_redirect_to(&response, "/login");
+}
+
+#[tokio::test]
+async fn newsletter_creation_is_idempotent() {
+    let test_app = spawn_app().await;
+    create_confirmed_subscriber(&test_app).await;
+    test_app.login().await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&test_app.email_server)
+        .await;
+    
+    let newsletter_request_body = serde_json::json!({
+        "title": "Newsletter title",
+        "html_content": "<p>Newsletter body as HTML</p>",
+        "text_content": "Newsletter body as plain text",
+        "idempotency_key": uuid::Uuid::new_v4().to_string(),
+    });
+
+    let response = test_app.post_newsletters(&newsletter_request_body).await;
+    assert_is_redirect_to(&response, "/admin/newsletters");
+
+    let html_page = test_app.get_admin_newsletters_html().await;
+    assert!(html_page.contains("Your newsletter has been successfully sent"));
+
+    // Submit newsletter form *again*
+    let response = test_app.post_newsletters(&newsletter_request_body).await;
+    assert_is_redirect_to(&response, "/admin/newsletters");
+
+    // let html_page = test_app.get_admin_newsletters_html().await;
+    // assert!(html_page.contains("Your newsletter has been successfully sent"));
+
+    // Mock verifies that the newsletter has been sent only once
+
+}
+
+#[tokio::test]
+async fn concurrent_form_submission_is_handled_gracefully() {
+    let test_app = spawn_app().await;
+    create_confirmed_subscriber(&test_app).await;
+    test_app.login().await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        // Set delay to give time for second request to arrive
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(2)))
+        .expect(1)
+        .mount(&test_app.email_server)
+        .await;
+
+    let newsletter_request_body = serde_json::json!({
+        "title": "Newsletter title",
+        "html_content": "<p>Newsletter body as HTML</p>",
+        "text_content": "Newsletter body as plain text",
+        "idempotency_key": uuid::Uuid::new_v4().to_string(),
+    });
+    let response1 = test_app.post_newsletters(&newsletter_request_body).await;
+    let response2 = test_app.post_newsletters(&newsletter_request_body).await;
+
+    assert_eq!(response1.status(), response2.status());
+    assert_eq!(response1.text().await.unwrap(), response2.text().await.unwrap());
+
+    // Mock verifies on Drop that only one newsetter was sent
 }
