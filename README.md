@@ -25,11 +25,11 @@ The basic features guided by the ZtP, as well as the additional features I imple
 - Add validation to change password function to ensure proper length (between 12 and 128 characters)
 
 ## Tech Stack
-Actix-web - Rust web framework crate
+### Actix-web - Rust web framework crate
 - Middleware: TracingLogger from tracing crate, FlashMessagesFramework (signed cookies) from actix_web_flash_messages, SessionMiddleware (create & store sessions) from actix_session
 - Application state: Postgres connection pool, email client (API token, sender email), app url, HMAC secret for signed message cookies and session cookies
 
-Postgres - Data Model:
+### Postgres - Data Model:
 -   Subscribers table which stores a name, email, subscriber id, time, and subscription status,
 -   Subscription tokens table which stores a subscription token and subscriber id mapped to subscribers to enable confirmations
 -   Authorized users table which stores a username and an Argon2Id password hash
@@ -37,4 +37,5 @@ Postgres - Data Model:
 -   Newsletter table which stores a newsletter issue id, title, html and text contents, and a published date 
 -   Newsletter delivery queue which stores a newsletter issue ID and a subscriber email as primary keys to manage newsletter delivery workflow
 
-Redis - Stores session token as key and session state as JSON value (user id is the session state)
+### Redis
+- Stores session token as key and session state as JSON value (user id is the session state)
