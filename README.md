@@ -39,3 +39,6 @@ The basic features guided by the ZtP, as well as the additional features I imple
 
 ### Redis
 - Stores session token as key and session state as JSON value (user id is the session state)
+
+## Deployment
+Deployed to Digital Ocean through a Docker image and via spec.yaml configuration, with a provisioned Postgres and Redis instance
