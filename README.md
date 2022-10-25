@@ -16,7 +16,7 @@ The basic features guided by the ZtP, as well as the additional features I imple
 - A background worker to deliver newsletter issues from the newsletter delivery queue
 
 ### Additional, self-implemented features
-- Handle duplicat subscribe actions by the same email address
+- Handle duplicate subscribe actions by the same email address
   - If already confirmed through link, return HTTP 200
   - If not yet confirmed, generate a new subscription token and send a new confirmation link
 - Gate the sending of newsletters behind user authentication using session-based authentication. Only allow authenticated authors to send newsletter issues
